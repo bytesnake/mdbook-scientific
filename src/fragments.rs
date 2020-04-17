@@ -1,12 +1,12 @@
-use std::{str, usize};
-use std::io::Write;
 use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::{str, usize};
 
-use crate::error::{Result, Error};
+use crate::error::{Error, Result};
 
-use sha2::{Digest,Sha256};
+use sha2::{Digest, Sha256};
 
 pub fn hash(input: &str) -> String {
     let mut sh = Sha256::new();
@@ -16,23 +16,30 @@ pub fn hash(input: &str) -> String {
     out
 }
 
-pub fn generate_svg_from_latex(dest_path: &Path, file: &Path, zoom: f32) -> Result<()> {
+pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
+    let dest_path = path.parent().unwrap();
+    let file: &Path = path.file_name().unwrap().as_ref();
+
     // use latex to generate a dvi
-    let dvi_path = file.with_extension("dvi");
+    let dvi_path = path.with_extension("dvi");
     if !dvi_path.exists() {
         let cmd = Command::new("/usr/bin/latex")
-            .current_dir(dest_path)
+            .current_dir(&dest_path)
             //.arg("--jobname").arg(&dvi_path)
             .arg(&file.with_extension("tex"))
-            .output().expect("Could not spawn latex");
+            .output()
+            .expect("Could not spawn latex");
 
         if !cmd.status.success() {
             let buf = String::from_utf8_lossy(&cmd.stdout);
 
             let err = buf
-                .split("\n").filter(|x| (x.starts_with("! ") || x.starts_with("l.")) && !x.contains("Emergency stop"))
-                .fold(("", "", usize::MAX), |mut err,elm| {
-                    if elm.starts_with("! "){
+                .split("\n")
+                .filter(|x| {
+                    (x.starts_with("! ") || x.starts_with("l.")) && !x.contains("Emergency stop")
+                })
+                .fold(("", "", usize::MAX), |mut err, elm| {
+                    if elm.starts_with("! ") {
                         err.0 = elm;
                     } else if elm.starts_with("l.") {
                         let mut elms = elm[2..].splitn(2, " ").map(|x| x.trim());
@@ -47,25 +54,35 @@ pub fn generate_svg_from_latex(dest_path: &Path, file: &Path, zoom: f32) -> Resu
                     err
                 });
 
-            return Err(Error::InvalidMath(err.0.to_string(), err.1.to_string(), err.2));
+            return Err(Error::InvalidMath(
+                err.0.to_string(),
+                err.1.to_string(),
+                err.2,
+            ));
         }
     }
 
     // convert the dvi to a svg file with the woff font format
-    let svg_path = file.with_extension("svg");
+    let svg_path = path.with_extension("svg");
     if !svg_path.exists() && dvi_path.exists() {
         let cmd = Command::new("/usr/bin/dvisvgm")
-            .current_dir(dest_path)
-            .arg("-b").arg("1")
+            .current_dir(&dest_path)
+            .arg("-b")
+            .arg("1")
             .arg("--font-format=woff")
             .arg(&format!("--zoom={}", zoom))
             .arg(&dvi_path)
-            .output().expect("Couldn't run svisvgm properly!");
+            .output()
+            .expect("Couldn't run svisvgm properly!");
+
+        if !cmd.status.success() {
+            let buf = String::from_utf8_lossy(&cmd.stdout);
+            dbg!(buf);
+        }
     }
 
     Ok(())
 }
-
 
 fn generate_latex_from_gnuplot(dest_path: &Path, content: &str, filename: &str) -> Result<()> {
     let cmd = Command::new("/usr/bin/gnuplot")
@@ -74,27 +91,34 @@ fn generate_latex_from_gnuplot(dest_path: &Path, content: &str, filename: &str) 
         .arg("-p")
         .spawn()
         .unwrap();
-        //.expect("Could not spawn gnuplot");
+    //.expect("Could not spawn gnuplot");
 
     let mut stdin = cmd.stdin.unwrap();
-    stdin.write_all(&format!("set output '{}.tex'\n", filename).as_bytes())
+    stdin
+        .write_all(&format!("set output '{}.tex'\n", filename).as_bytes())
         .map_err(|err| Error::Io(err))?;
-    stdin.write_all("set terminal epslatex color\n".as_bytes())
+    stdin
+        .write_all("set terminal epslatex color\n".as_bytes())
         .map_err(|err| Error::Io(err))?;
-    stdin.write_all(content.as_bytes())
+    stdin
+        .write_all(content.as_bytes())
         .map_err(|err| Error::Io(err))?;
 
     Ok(())
 }
 
-pub fn parse_equation(dest_path: &Path, elms: Vec<String>, content: &str, zoom: f32) -> Result<(String, Option<String>)> {
+pub fn parse_equation(
+    dest_path: &Path,
+    elms: Vec<String>,
+    content: &str,
+    zoom: f32,
+) -> Result<(String, Option<String>)> {
     let name = hash(content);
     let path = dest_path.join(&name);
-    
+
     // create a new tex file containing the equation
     if !path.with_extension("tex").exists() {
-        let mut file = File::create(path.with_extension("tex"))
-            .map_err(|err| Error::Io(err))?;
+        let mut file = File::create(path.with_extension("tex")).map_err(|err| Error::Io(err))?;
 
         file.write_all("\\documentclass[20pt, preview]{standalone}\n\\usepackage{amsmath}\\usepackage{amsfonts}\n\\begin{document}\n$$\n".as_bytes())
             .map_err(|err| Error::Io(err))?;
@@ -106,34 +130,47 @@ pub fn parse_equation(dest_path: &Path, elms: Vec<String>, content: &str, zoom: 
             .map_err(|err| Error::Io(err))?;
     }
 
-    generate_svg_from_latex(dest_path, &path, zoom)?;
+    generate_svg_from_latex(&path, zoom)?;
 
-    Ok((format!("{}.svg", name),elms.into_iter().next()))
+    Ok((format!("{}.svg", name), elms.into_iter().next()))
 }
 
-pub fn parse_latex(dest_path: &Path, params: Vec<String>, content: &str) -> Result<(String, String, String)> {
+pub fn parse_latex(
+    dest_path: &Path,
+    params: Vec<String>,
+    content: &str,
+) -> Result<(String, String, String)> {
     let name = hash(content);
     let path = dest_path.join(&name);
-    
+
     // create a new tex file containing the equation
     if !path.with_extension("tex").exists() {
-        let mut file = File::create(path.with_extension("tex"))
-            .map_err(|err| Error::Io(err))?;
+        let mut file = File::create(path.with_extension("tex")).map_err(|err| Error::Io(err))?;
 
         file.write_all(content.as_bytes())
             .map_err(|err| Error::Io(err))?;
     }
 
-    generate_svg_from_latex(dest_path, &path, 1.0)?;
+    generate_svg_from_latex(&path, 1.0)?;
 
     if let (Some(refere), Some(title)) = (params.get(0), params.get(1)) {
-        Ok((format!("{}.svg", name), title.to_string(), refere.to_string()))
+        Ok((
+            format!("{}.svg", name),
+            title.to_string(),
+            refere.to_string(),
+        ))
     } else {
-        Err(Error::InvalidPlot("missing title or reference in plot".into()))
+        Err(Error::InvalidPlot(
+            "missing title or reference in plot".into(),
+        ))
     }
 }
 
-pub fn parse_gnuplot(dest_path: &Path, params: Vec<String>, content: &str) -> Result<(String, String, String)> {
+pub fn parse_gnuplot(
+    dest_path: &Path,
+    params: Vec<String>,
+    content: &str,
+) -> Result<(String, String, String)> {
     let name = hash(content);
     let path = dest_path.join(&name);
 
@@ -142,8 +179,7 @@ pub fn parse_gnuplot(dest_path: &Path, params: Vec<String>, content: &str) -> Re
         generate_latex_from_gnuplot(dest_path, content, &name_plot)?;
 
         let path_tex = path.with_extension("tex");
-        let mut file = File::create(path_tex)
-            .map_err(|err| Error::Io(err))?;
+        let mut file = File::create(path_tex).map_err(|err| Error::Io(err))?;
 
         file.write_all("\\documentclass[preview]{standalone}\n\\usepackage{graphicx}\\usepackage{amsmath}\n\\begin{document}\n".as_bytes())
             .map_err(|err| Error::Io(err))?;
@@ -154,17 +190,27 @@ pub fn parse_gnuplot(dest_path: &Path, params: Vec<String>, content: &str) -> Re
         file.write_all("\\end{document}".as_bytes())
             .map_err(|err| Error::Io(err))?;
 
-        generate_svg_from_latex(dest_path, &path, 1.0)?;
+        generate_svg_from_latex(&path, 1.0)?;
     }
 
     if let (Some(refere), Some(title)) = (params.get(0), params.get(1)) {
-        Ok((format!("{}.svg", name), title.to_string(), refere.to_string()))
+        Ok((
+            format!("{}.svg", name),
+            title.to_string(),
+            refere.to_string(),
+        ))
     } else {
-        Err(Error::InvalidPlot("missing title or reference in plot".into()))
+        Err(Error::InvalidPlot(
+            "missing title or reference in plot".into(),
+        ))
     }
 }
 
-pub fn parse_gnuplot_only(dest_path: &Path, params: Vec<String>, content: &str) -> Result<(String, String, String)> {
+pub fn parse_gnuplot_only(
+    dest_path: &Path,
+    params: Vec<String>,
+    content: &str,
+) -> Result<(String, String, String)> {
     let name = hash(content);
     let path = dest_path.join(&name);
 
@@ -177,30 +223,39 @@ pub fn parse_gnuplot_only(dest_path: &Path, params: Vec<String>, content: &str) 
             .arg("-p")
             .spawn()
             .unwrap();
-            //.expect("Could not spawn gnuplot");
+        //.expect("Could not spawn gnuplot");
 
         let mut stdin = cmd.stdin.unwrap();
-        stdin.write_all(&format!("set output '{}.svg'\n", name).as_bytes())
+        stdin
+            .write_all(&format!("set output '{}.svg'\n", name).as_bytes())
             .map_err(|err| Error::Io(err))?;
-        stdin.write_all("set terminal svg\n".as_bytes())
+        stdin
+            .write_all("set terminal svg\n".as_bytes())
             .map_err(|err| Error::Io(err))?;
-        stdin.write_all("set encoding utf8\n".as_bytes())
+        stdin
+            .write_all("set encoding utf8\n".as_bytes())
             .map_err(|err| Error::Io(err))?;
-        stdin.write_all(content.as_bytes())
+        stdin
+            .write_all(content.as_bytes())
             .map_err(|err| Error::Io(err))?;
     }
 
     if let (Some(refere), Some(title)) = (params.get(0), params.get(1)) {
-        Ok((format!("{}.svg", name), title.to_string(), refere.to_string()))
+        Ok((
+            format!("{}.svg", name),
+            title.to_string(),
+            refere.to_string(),
+        ))
     } else {
-        Err(Error::InvalidPlot("missing title or reference in plot".into()))
+        Err(Error::InvalidPlot(
+            "missing title or reference in plot".into(),
+        ))
     }
 }
 
-
 /*pub fn parse_code(params: Vec<String>, content: String, url: String) -> Result<String> {
     let mut out: String = "".into();
-    
+
     let mut found_first = false;
     for tag in params {
         let start_tag = format!("$ref:{}$", tag);

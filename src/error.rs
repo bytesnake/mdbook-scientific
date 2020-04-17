@@ -1,4 +1,4 @@
-use std::{io, result};                                                                      
+use std::{io, result};
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -8,5 +8,5 @@ pub enum Error {
     InvalidReference(String),
     InvalidPlot(String),
     InvalidCode(String),
-    Io(io::Error)
+    Io(io::Error),
 }

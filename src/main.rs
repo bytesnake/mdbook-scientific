@@ -1,7 +1,7 @@
-use mdbook_scientific::Scientific;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use mdbook::errors::Error;
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor};
+use mdbook_scientific::Scientific;
 use std::io;
 use std::process;
 
@@ -44,6 +44,7 @@ fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<(), Error> {
         );
     }
 
+
     let processed_book = pre.run(&ctx, book)?;
     serde_json::to_writer(io::stdout(), &processed_book)?;
 
@@ -61,4 +62,3 @@ fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
         process::exit(1);
     }
 }
-
