@@ -263,6 +263,19 @@ pub fn parse_gnuplot_only(
     }
 }
 
+pub fn bib_to_html(source: &str) -> String {
+    //./bib2xhtml.pl -s alpha -u -U ~/Documents/Bachelor_thesis/literature.bib
+    let cmd = Command::new("bib2xhtml")
+        .args(&["-s", "alpha", "-u", "-U"])
+        .arg(source)
+        .output()
+        .expect("Could not spawn bib2xhtml");
+
+    let buf = String::from_utf8_lossy(&cmd.stdout);
+    
+    buf.to_string()
+}
+
 /*pub fn parse_code(params: Vec<String>, content: String, url: String) -> Result<String> {
     let mut out: String = "".into();
 

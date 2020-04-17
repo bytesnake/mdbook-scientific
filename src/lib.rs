@@ -5,10 +5,12 @@ mod preprocess;
 use std::collections::HashMap;
 use std::path::Path;
 use std::fs;
+use std::path::PathBuf;
 
-use mdbook::book::{Book, BookItem};
+use mdbook::book::{Book, BookItem, Chapter};
 use mdbook::errors::Error;
 use mdbook::preprocess::{Preprocessor, PreprocessorContext};
+use nom_bibtex::*;
 
 use preprocess::{replace_blocks, replace_inline_blocks};
 
@@ -26,13 +28,12 @@ impl Preprocessor for Scientific {
     }
 
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book, Error> {
-        // In testing we want to tell the preprocessor to blow up by setting a
-        // particular config value
         if let Some(cfg) = ctx.config.get_preprocessor(self.name()) {
             let fragment_path = cfg
                 .get("fragment_path")
                 .map(|x| x.as_str().unwrap())
                 .unwrap_or("fragments/");
+
             let fragment_path = Path::new(fragment_path).canonicalize().unwrap();
 
             // track which fragments we use to copy them into the assets folder
@@ -41,6 +42,20 @@ impl Preprocessor for Scientific {
             let mut references = HashMap::new();
             // if there occurs an error skip everything and return the error
             let mut error = None;
+
+            // load all references in the bibliography and export to html
+            if let Some(bib) = cfg.get("bibliography") {
+                let bib = bib.as_str().unwrap();
+                let bibtex = fs::read_to_string(bib).unwrap();
+                let bibtex = Bibtex::parse(&bibtex).unwrap();
+                for (i, entry) in bibtex.bibliographies().into_iter().enumerate() {
+                    references.insert(entry.citation_key().to_string(), format!("[{}]", i));
+                }
+                //
+                // create bibliography
+                let bib_chapter = Chapter::new("Bibliography", fragments::bib_to_html(&bib), PathBuf::from("bibliography.md"), Vec::new());
+                book.push_item(bib_chapter);
+            }
 
             book.for_each_mut(|item| {
                 if error.is_some() {
