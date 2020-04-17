@@ -33,6 +33,14 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
         if !cmd.status.success() {
             let buf = String::from_utf8_lossy(&cmd.stdout);
 
+            // latex prints error to the stdout, if this is empty, then something is fundamentally
+            // wrong with the latex binary (for example shared library error). In this case just
+            // exit the program
+            if buf.is_empty() {
+                let buf = String::from_utf8_lossy(&cmd.stderr);
+                panic!("Latex exited with `{}`", buf);
+            }
+
             let err = buf
                 .split("\n")
                 .filter(|x| {
@@ -115,6 +123,8 @@ pub fn parse_equation(
 ) -> Result<(String, Option<String>)> {
     let name = hash(content);
     let path = dest_path.join(&name);
+
+    eprintln!("{}", content);
 
     // create a new tex file containing the equation
     if !path.with_extension("tex").exists() {

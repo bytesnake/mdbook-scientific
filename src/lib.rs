@@ -1,5 +1,6 @@
 mod error;
 mod fragments;
+mod preprocess;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -8,6 +9,8 @@ use std::fs;
 use mdbook::book::{Book, BookItem};
 use mdbook::errors::Error;
 use mdbook::preprocess::{Preprocessor, PreprocessorContext};
+
+use preprocess::{replace_blocks, replace_inline_blocks};
 
 pub struct Scientific;
 
@@ -32,25 +35,46 @@ impl Preprocessor for Scientific {
                 .unwrap_or("fragments/");
             let fragment_path = Path::new(fragment_path).canonicalize().unwrap();
 
+            // track which fragments we use to copy them into the assets folder
             let mut used_fragments = Vec::new();
+            // track which references are created
             let mut references = HashMap::new();
+            // if there occurs an error skip everything and return the error
+            let mut error = None;
 
-            book.for_each_mut(|item| match item {
-                BookItem::Chapter(ch) => {
-                    match replace_blocks(&fragment_path, &ch.content, ch.number.as_ref().map(|x| format!("{}", x)).unwrap_or("1".into()), &mut used_fragments, &mut references) {
+            book.for_each_mut(|item| {
+                if error.is_some() {
+                    return;
+                }
+
+                if let BookItem::Chapter(ref mut ch) = item {
+                    let head_number = ch.number.as_ref().map(|x| format!("{}", x)).unwrap_or("".into());
+
+                    match replace_blocks(&fragment_path, &ch.content, &head_number, &mut used_fragments, &mut references) {
                         Ok(x) => ch.content = x,
-                        Err(err) => panic!("Could not replace blocks: {:?}", err)
+                        Err(err) => error = Some(format!("Error in chapter {} {:?}", head_number, err))
                     }
                 }
-                _ => {}
             });
 
-            book.for_each_mut(|item| match item {
-                BookItem::Chapter(ch) => {
-                    ch.content = replace_inline_blocks(&ch.content, &references);
-                },
-                _ => {}
+            book.for_each_mut(|item| {
+                if error.is_some() {
+                    return;
+                }
+
+                if let BookItem::Chapter(ref mut ch) = item {
+                    let head_number = ch.number.as_ref().map(|x| format!("{}", x)).unwrap_or("".into());
+
+                    match replace_inline_blocks(&fragment_path, &ch.content, &references, &mut used_fragments) {
+                        Ok(x) => ch.content = x,
+                        Err(err) => error = Some(format!("Error in chapter {}: {:?}", head_number, err))
+                    }
+                }
             });
+
+            if let Some(err) = error {
+                return Err(err.into());
+            }
 
             // copy all used fragments to `assets`
             let dest = ctx.root.join("src").join("assets");
@@ -73,85 +97,3 @@ impl Preprocessor for Scientific {
     }
 }
 
-fn replace_blocks(fragment_path: &Path, source: &str, head_num: String, used_fragments: &mut Vec<String>, references: &mut HashMap<String, String>) -> error::Result<String> {
-    let mut content = String::new();
-    let mut start_line: Option<String> = None;
-    let mut figures_counter = 0;
-
-    Ok(source.split("\n")
-    .filter_map(|line| {
-        if !line.starts_with("$$") {
-            if start_line.is_some() {
-                content.push_str(line);
-                content.push('\n');
-                return None;
-            } else {
-                return Some(format!("{}\n", line));
-            }
-        }
-
-        if let Some(ref param) = start_line {
-            let mut elms = param.splitn(3, ",").map(|x| x.trim());
-
-            let generated_out = match elms.next() {
-                Some("$$latex") => {
-                    figures_counter += 1;
-                    fragments::parse_latex(fragment_path, elms.map(|x| x.to_string()).collect(), &content)
-                        .map(|(file, title, refer)| {
-                            used_fragments.push(file.clone());
-                            references.insert(refer.clone(), format!("Figure {}.{}", head_num, figures_counter));
-
-                            format!("<figure id=\"{}\" class=\"figure\"><object data=\"/assets/{}\" type=\"image/svg+xml\"/></object><figcaption>Figure {}.{} {}</figcaption></figure>", refer, file, head_num, figures_counter, title)
-                        })
-                },
-                _ => Err(error::Error::InvalidCode("blub".into()))
-            };
-            content = "".into();
-            start_line = None;
-
-            match generated_out {
-                Ok(generated_out) => Some(format!("{}\n", generated_out)),
-                Err(err) => panic!("{:?}", err)
-            }
-        } else {
-            start_line = Some(line.to_string());
-            None
-        }
-    })
-    .collect::<String>())
-}
-
-fn replace_inline_blocks(source: &str, references: &HashMap<String, String>) -> String {
-    source.split("\n").map(|line| {
-        if line.matches("$").count() % 2 != 0 {
-            panic!("Uneven number of $ in line");
-        }
-
-        line.split("$").enumerate().map(|(i, mut elm)| {
-            if i % 2 == 0 {
-                return elm.to_string();
-            }
-
-            let generated_out = if elm.starts_with("ref") {
-                let elms = elm.split(":").skip(1).collect::<Vec<&str>>();
-
-                match &elms[..] {
-                    ["fig", refere] => {
-                        references.get::<str>(refere)
-                            .map(|x| format!("<a class=\"fig_ref\" href='#{}'>{}</a>", elms[1], x))
-                            .unwrap()
-                    },
-                    _ => panic!("Blub")
-                }
-            } else {
-                panic!("");
-            };
-
-            /*match generated_out {
-                Ok(generated_out) => generated_out,
-                Err(_) => panic!("cds")
-            }*/
-            generated_out
-        }).collect::<String>()
-    }).collect::<String>()
-}
