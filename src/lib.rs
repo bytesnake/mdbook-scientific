@@ -44,16 +44,29 @@ impl Preprocessor for Scientific {
             let mut error = None;
 
             // load all references in the bibliography and export to html
-            if let Some(bib) = cfg.get("bibliography") {
+            if let (Some(bib), Some(bib2xhtml)) = (cfg.get("bibliography"), cfg.get("bib2xhtml")) {
                 let bib = bib.as_str().unwrap();
+                let bib2xhtml = bib2xhtml.as_str().unwrap();
+
+                if !Path::new(bib).exists() {
+                    return Err(format!("bibliography {:?} not found!", bib).into());
+                }
+
+                // read entries in bibtex file
                 let bibtex = fs::read_to_string(bib).unwrap();
                 let bibtex = Bibtex::parse(&bibtex).unwrap();
                 for (i, entry) in bibtex.bibliographies().into_iter().enumerate() {
-                    references.insert(entry.citation_key().to_string(), format!("[{}]", i));
+                    references.insert(entry.citation_key().to_string(), format!("[{}]", i+1));
                 }
                 //
                 // create bibliography
-                let bib_chapter = Chapter::new("Bibliography", fragments::bib_to_html(&bib), PathBuf::from("bibliography.md"), Vec::new());
+                let content = match fragments::bib_to_html(&bib, &bib2xhtml) {
+                    Ok(x) => x,
+                    Err(err) => return Err(format!("{:?}", err).into())
+                };
+
+                // add final chapter for bibliography
+                let bib_chapter = Chapter::new("Bibliography", content, PathBuf::from("bibliography.md"), Vec::new());
                 book.push_item(bib_chapter);
             }
 

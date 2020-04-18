@@ -112,7 +112,7 @@ pub fn replace_inline_blocks(fragment_path: &Path, source: &str, references: &Ha
                     ["bib", refere] => {
                         references.get::<str>(refere)
                             .ok_or(Error::InvalidReference(format!("could not find reference to `{}` in line {}", elms[1], line_num)))
-                            .map(|_| format!("<a class=\"bib_ref\" href='#{}'>{}</a>", elms[1], elms[1]))
+                            .map(|x| format!("<a class=\"bib_ref\" href='/bibliography.html#{}'>{}</a>", elms[1], x))
                     },
                     ["equ", refere] => {
                         references.get::<str>(refere)

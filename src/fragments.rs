@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -263,17 +263,30 @@ pub fn parse_gnuplot_only(
     }
 }
 
-pub fn bib_to_html(source: &str) -> String {
+pub fn bib_to_html(source: &str, bib2xhtml: &str) -> Result<String> {
+    let source = fs::canonicalize(source).unwrap();
+    let bib2xhtml = Path::new(bib2xhtml);
+
+    if !bib2xhtml.exists() {
+        return Err(Error::InvalidBibliography("path to bib2xhtml not found!".into()));
+    }
+
     //./bib2xhtml.pl -s alpha -u -U ~/Documents/Bachelor_thesis/literature.bib
-    let cmd = Command::new("bib2xhtml")
+    let cmd = Command::new(bib2xhtml.join("./bib2xhtml.pl"))
+        .current_dir(bib2xhtml)
         .args(&["-s", "alpha", "-u", "-U"])
         .arg(source)
         .output()
         .expect("Could not spawn bib2xhtml");
 
     let buf = String::from_utf8_lossy(&cmd.stdout);
-    
-    buf.to_string()
+
+    let err_str = String::from_utf8_lossy(&cmd.stderr);
+    if err_str.contains("error messages)") {
+        Err(Error::InvalidBibliography(err_str.to_string()))
+    } else {
+        Ok(buf.to_string())
+    }
 }
 
 /*pub fn parse_code(params: Vec<String>, content: String, url: String) -> Result<String> {

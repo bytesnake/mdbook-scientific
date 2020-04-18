@@ -7,6 +7,7 @@ pub enum Error {
     InvalidMath(String, String, usize), // reason, element, line
     InvalidReference(String),
     InvalidPlot(String),
+    InvalidBibliography(String),
     UnevenNumberDollar,
     Io(io::Error),
 }
