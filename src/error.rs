@@ -8,6 +8,7 @@ pub enum Error {
     InvalidReference(String),
     InvalidPlot(String),
     InvalidBibliography(String),
+    InvalidDvisvgm(String),
     UnevenNumberDollar,
     Io(io::Error),
 }

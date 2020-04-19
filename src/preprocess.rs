@@ -1,18 +1,39 @@
+use std::fs;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::fragments;
 use crate::error::{Error, Result};
 
-pub fn replace_blocks(fragment_path: &Path, source: &str, head_num: &str, used_fragments: &mut Vec<String>, references: &mut HashMap<String, String>) -> Result<String> {
+pub fn replace_blocks(fragment_path: &Path, asset_path: &Path, source: &str, head_num: &str, used_fragments: &mut Vec<String>, references: &mut HashMap<String, String>) -> Result<String> {
     let mut content = String::new();
     let mut start_line: Option<String> = None;
     let mut figures_counter = 0;
     let mut equations_counter = 0;
 
+    let mut add_object = move |file: String, refer: &str, title: Option<&str>| -> String {
+        used_fragments.push(file.clone());
+
+        if let Some(title) = title {
+            figures_counter += 1;
+            references.insert(refer.to_string(), format!("Figure {}{}", head_num, figures_counter));
+
+            format!("<figure id=\"{}\" class=\"figure\"><object data=\"/assets/{}\" type=\"image/svg+xml\"/></object><figcaption>Figure {}{} {}</figcaption></figure>", 
+                refer, file, head_num, figures_counter, title)
+        } else if !refer.is_empty() {
+            equations_counter += 1;
+            references.insert(refer.to_string(), format!("{}{}", head_num, equations_counter));
+            format!("<div id=\"{}\" class=\"equation\"><div class=\"equation_inner\"><object data=\"/assets/{}\" type=\"image/svg+xml\"></object></div><span>({}{})</span></div>\n", refer, file, head_num, equations_counter)
+        } else {
+            format!("<div class=\"equation\"><div class=\"equation_inner\"><object data=\"/assets/{}\" type=\"image/svg+xml\"></object></div></div>\n", file)
+        }
+    };
+
     source.split("\n")
     .filter_map(|line| {
-        if !line.starts_with("$$") {
+        let line = line.trim();
+
+        if !line.starts_with("```") {
             if start_line.is_some() {
                 content.push_str(line);
                 content.push('\n');
@@ -20,64 +41,56 @@ pub fn replace_blocks(fragment_path: &Path, source: &str, head_num: &str, used_f
             } else {
                 return Some(Ok(line.into()));
             }
+        } else if line.ends_with("```") && line.len() > 3{
+            // line starts and end with ```, set content to empty
+            start_line = Some(line.to_string());
+            content = "".into();
         }
 
-        if let Some(ref param) = start_line {
-            let mut elms = param.splitn(3, ",").map(|x| x.trim());
+        if let Some(param) = start_line.take() {
+            let elms = param.splitn(3, ",")
+                .map(|x| x.trim())
+                .collect::<Vec<_>>();
 
-            let generated_out = match elms.next() {
-                Some("$$latex") => {
-                    figures_counter += 1;
-                    fragments::parse_latex(fragment_path, elms.map(|x| x.to_string()).collect(), &content)
-                        .map(|(file, title, refer)| {
-                            used_fragments.push(file.clone());
-                            references.insert(refer.clone(), format!("Figure {}{}", head_num, figures_counter));
+            // if there is no content, try to load it from file
+            if content.is_empty() {
+                let path = asset_path.join(elms[1]);
+                if path.exists() {
+                    content = fs::read_to_string(path).unwrap();
+                } else {
+                    eprintln!("Block empty, but file `{}` was not found!", elms[1]);
+                    return None;
+                }
+            }
 
-                            format!("<figure id=\"{}\" class=\"figure\"><object data=\"/assets/{}\" type=\"image/svg+xml\"/></object><figcaption>Figure {}{} {}</figcaption></figure>", refer, file, head_num, figures_counter, title)
-                        })
+            let generated_out = match &elms[..] {
+                ["```latex", refer, title] => {
+                    fragments::parse_latex(fragment_path, &content)
+                        .map(|file| add_object(file, refer, Some(title)))
                 },
-                Some("$$gnuplot") => {
-                    figures_counter += 1;
-                    fragments::parse_gnuplot(fragment_path, elms.map(|x| x.to_string()).collect(), &content)
-                        .map(|(file, title, refer)| {
-                            used_fragments.push(file.clone());
-
-                            references.insert(refer.clone(), format!("Figure {}{}", head_num, figures_counter));
-
-                            format!("<figure id=\"{}\" class=\"figure\"><object data=\"/assets/{}\" type=\"image/svg+xml\"/></object><figcaption>Figure {}.{} {}</figcaption></figure>", refer, file, head_num, figures_counter, title)
-                        })
+                ["```gnuplot", refer, title] => {
+                    fragments::parse_gnuplot(fragment_path, &content)
+                        .map(|file| add_object(file, refer, Some(title)))
                 },
-               Some("$$gnuplotonly") => {
-                    figures_counter += 1;
-                    fragments::parse_gnuplot_only(fragment_path,elms.map(|x| x.to_string()).collect(), &content)
-                        .map(|(file,title,refer)| {
-                            used_fragments.push(file.clone());
+                ["```gnuplotonly", refer, title] => {
+                    fragments::parse_gnuplot_only(fragment_path, &content)
+                        .map(|file| add_object(file, refer, Some(title)))
+                },
 
-                            references.insert(refer.clone(), format!("Figure {}{}", head_num, figures_counter));
+                ["```equation"] | ["```equ"] => {
+                    fragments::parse_equation(fragment_path, &content, 1.6)
+                        .map(|file| add_object(file, "", None))
+                },
 
-                            format!("<figure id=\"{}\" class=\"figure\"><object data=\"/assets/{}\" type=\"image/svg+xml\"/></object><figcaption>Figure {}.{} {}</figcaption></figure>", refer, file, head_num, figures_counter, title)
-                        })
-               },
-
-                Some("$$equation") | _ => {
-                    fragments::parse_equation(fragment_path, elms.map(|x| x.to_string()).collect(), &content, 1.6)
-                        .map(|(filename, refer)| {
-                            used_fragments.push(filename.clone());
-
-                            match refer {
-                                Some(refer) => {
-                                    equations_counter += 1;
-                                    references.insert(refer.clone(), format!("{}{}", head_num, equations_counter));
-
-                                    format!("<div id=\"{}\" class=\"equation\"><div class=\"equation_inner\"><object data=\"/assets/{}\" type=\"image/svg+xml\"></object></div><span>({}.{})</span></div>\n", refer, filename, head_num, equations_counter)
-                                },
-                                None => format!("<div class=\"equation\"><div class=\"equation_inner\"><object data=\"/assets/{}\" type=\"image/svg+xml\"></object></div></div>\n", filename)
-                            }
-                        })
+                ["```equation", refer] | ["```equ", refer] => {
+                    fragments::parse_equation(fragment_path, &content, 1.6)
+                        .map(|file| add_object(file, refer, None))
+                }
+                line => {
+                    Ok(format!("{}\n{}\n```", line.join(":"), content))
                 }
             };
             content = "".into();
-            start_line = None;
 
             Some(generated_out)
         } else {
@@ -91,17 +104,22 @@ pub fn replace_blocks(fragment_path: &Path, source: &str, head_num: &str, used_f
 
 pub fn replace_inline_blocks(fragment_path: &Path, source: &str, references: &HashMap<String, String>, used_fragments: &mut Vec<String>) -> Result<String> {
     source.split("\n").enumerate().map(|(line_num, line)| {
-        if line.matches("$").count() % 2 != 0 {
+        if line.matches("`").count() % 2 != 0 {
             return Err(Error::UnevenNumberDollar);
         }
 
-        line.split("$").enumerate().map(|(i, elm)| {
+        line.split("`").enumerate().map(|(i, elm)| {
             if i % 2 == 0 {
                 return Ok(elm.to_string());
             }
 
-            let generated_out = if elm.starts_with("ref") {
+            let generated_out = if elm.starts_with("ref:") {
                 let elms = elm.split(":").skip(1).collect::<Vec<&str>>();
+
+                // we expect a type and reference name
+                if elms.len() != 2 {
+                    return Ok(elm.to_string());
+                }
 
                 match &elms[..] {
                     ["fig", refere] => {
@@ -123,14 +141,22 @@ pub fn replace_inline_blocks(fragment_path: &Path, source: &str, references: &Ha
                     _ =>         Err(Error::InvalidReference(format!("reference has wrong number of arguments `{}` in line {}", elms.len(), line_num)))
 
                 }
-            } else {
-              fragments::parse_equation(fragment_path, Vec::new(), elm, 1.3)
-                .map(|(filename, _)| {
-                    let res = format!("<object class=\"equ_inline\" data=\"/assets/{}\" type=\"image/svg+xml\"></object>", filename);
-                    used_fragments.push(filename);
+            } else if elm.starts_with("equ:") {
+                let elms = elm.split(":").skip(1).collect::<Vec<&str>>();
 
-                    res
-                })
+                if elms.len() != 1 {
+                    return Ok(elm.to_string());
+                }
+
+                fragments::parse_equation(fragment_path, elms[0], 1.3)
+                    .map(|filename| {
+                        let res = format!("<object class=\"equation_inline\" data=\"/assets/{}\" type=\"image/svg+xml\"></object>", filename);
+                        used_fragments.push(filename);
+
+                        res
+                    })
+            } else {
+                Ok(elm.to_string())
             };
 
             generated_out

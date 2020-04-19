@@ -66,9 +66,13 @@ impl Preprocessor for Scientific {
                 };
 
                 // add final chapter for bibliography
-                let bib_chapter = Chapter::new("Bibliography", content, PathBuf::from("bibliography.md"), Vec::new());
+                let bib_chapter = Chapter::new("Bibliography", format!("# Bibliography\n{}", content), PathBuf::from("bibliography.md"), Vec::new());
                 book.push_item(bib_chapter);
             }
+
+            // assets path
+            let asset_path = cfg.get("assets").map(|x| x.as_str().unwrap()).unwrap_or("");
+            let asset_path = ctx.root.join(asset_path);
 
             book.for_each_mut(|item| {
                 if error.is_some() {
@@ -78,7 +82,7 @@ impl Preprocessor for Scientific {
                 if let BookItem::Chapter(ref mut ch) = item {
                     let head_number = ch.number.as_ref().map(|x| format!("{}", x)).unwrap_or("".into());
 
-                    match replace_blocks(&fragment_path, &ch.content, &head_number, &mut used_fragments, &mut references) {
+                    match replace_blocks(&fragment_path, &asset_path, &ch.content, &head_number, &mut used_fragments, &mut references) {
                         Ok(x) => ch.content = x,
                         Err(err) => error = Some(format!("Error in chapter {} {:?}", head_number, err))
                     }
@@ -111,6 +115,7 @@ impl Preprocessor for Scientific {
             }
 
             for fragment in used_fragments {
+                dbg!(&fragment);
                 fs::copy(fragment_path.join(&fragment), dest.join(&fragment)).unwrap();
             }
 
