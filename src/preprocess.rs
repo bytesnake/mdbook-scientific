@@ -18,14 +18,14 @@ pub fn replace_blocks(fragment_path: &Path, asset_path: &Path, source: &str, hea
             figures_counter += 1;
             references.insert(refer.to_string(), format!("Figure {}{}", head_num, figures_counter));
 
-            format!("<figure id=\"{}\" class=\"figure\"><object data=\"/assets/{}\" type=\"image/svg+xml\"/></object><figcaption>Figure {}{} {}</figcaption></figure>", 
+            format!("<figure id=\"{}\" class=\"figure\"><object data=\"assets/{}\" type=\"image/svg+xml\"/></object><figcaption>Figure {}{} {}</figcaption></figure>", 
                 refer, file, head_num, figures_counter, title)
         } else if !refer.is_empty() {
             equations_counter += 1;
             references.insert(refer.to_string(), format!("{}{}", head_num, equations_counter));
-            format!("<div id=\"{}\" class=\"equation\"><div class=\"equation_inner\"><object data=\"/assets/{}\" type=\"image/svg+xml\"></object></div><span>({}{})</span></div>\n", refer, file, head_num, equations_counter)
+            format!("<div id=\"{}\" class=\"equation\"><div class=\"equation_inner\"><object data=\"assets/{}\" type=\"image/svg+xml\"></object></div><span>({}{})</span></div>\n", refer, file, head_num, equations_counter)
         } else {
-            format!("<div class=\"equation\"><div class=\"equation_inner\"><object data=\"/assets/{}\" type=\"image/svg+xml\"></object></div></div>\n", file)
+            format!("<div class=\"equation\"><div class=\"equation_inner\"><object data=\"assets/{}\" type=\"image/svg+xml\"></object></div></div>\n", file)
         }
     };
 
@@ -134,7 +134,7 @@ pub fn replace_inline_blocks(fragment_path: &Path, source: &str, references: &Ha
                     ["bib", refere] => {
                         references.get::<str>(refere)
                             .ok_or(Error::InvalidReference(format!("could not find reference to `{}` in line {}", elms[1], line_num)))
-                            .map(|x| format!("<a class=\"bib_ref\" href='/bibliography.html#{}'>{}</a>", elms[1], x))
+                            .map(|x| format!("<a class=\"bib_ref\" href='bibliography.html#{}'>{}</a>", elms[1], x))
                     },
                     ["equ", refere] => {
                         references.get::<str>(refere)
@@ -154,7 +154,7 @@ pub fn replace_inline_blocks(fragment_path: &Path, source: &str, references: &Ha
 
                 fragments::parse_equation(fragment_path, elms[0], 1.3)
                     .map(|filename| {
-                        let res = format!("<object class=\"equation_inline\" data=\"/assets/{}\" type=\"image/svg+xml\"></object>", filename);
+                        let res = format!("<object class=\"equation_inline\" data=\"assets/{}\" type=\"image/svg+xml\"></object>", filename);
                         used_fragments.push(filename);
 
                         res
