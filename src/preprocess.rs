@@ -50,11 +50,14 @@ pub fn replace_blocks(fragment_path: &Path, asset_path: &Path, source: &str, hea
         if let Some(param) = start_line.take() {
             let elms = param.splitn(3, ",")
                 .map(|x| x.trim())
+                .map(|x| x.replace("```", ""))
                 .collect::<Vec<_>>();
+
+            let elms = elms.iter().map(|x| x.as_str()).collect::<Vec<_>>();
 
             // if there is no content, try to load it from file
             if content.is_empty() {
-                let path = asset_path.join(elms[1]);
+                let path = asset_path.join(elms[1]).with_extension("tex");
                 if path.exists() {
                     content = fs::read_to_string(path).unwrap();
                 } else {
@@ -64,25 +67,25 @@ pub fn replace_blocks(fragment_path: &Path, asset_path: &Path, source: &str, hea
             }
 
             let generated_out = match &elms[..] {
-                ["```latex", refer, title] => {
+                ["latex", refer, title] => {
                     fragments::parse_latex(fragment_path, &content)
                         .map(|file| add_object(file, refer, Some(title)))
                 },
-                ["```gnuplot", refer, title] => {
+                ["gnuplot", refer, title] => {
                     fragments::parse_gnuplot(fragment_path, &content)
                         .map(|file| add_object(file, refer, Some(title)))
                 },
-                ["```gnuplotonly", refer, title] => {
+                ["gnuplotonly", refer, title] => {
                     fragments::parse_gnuplot_only(fragment_path, &content)
                         .map(|file| add_object(file, refer, Some(title)))
                 },
 
-                ["```equation"] | ["```equ"] => {
+                ["equation"] | ["equ"] => {
                     fragments::parse_equation(fragment_path, &content, 1.6)
                         .map(|file| add_object(file, "", None))
                 },
 
-                ["```equation", refer] | ["```equ", refer] => {
+                ["equation", refer] | ["equ", refer] => {
                     fragments::parse_equation(fragment_path, &content, 1.6)
                         .map(|file| add_object(file, refer, None))
                 }
@@ -105,6 +108,7 @@ pub fn replace_blocks(fragment_path: &Path, asset_path: &Path, source: &str, hea
 pub fn replace_inline_blocks(fragment_path: &Path, source: &str, references: &HashMap<String, String>, used_fragments: &mut Vec<String>) -> Result<String> {
     source.split("\n").enumerate().map(|(line_num, line)| {
         if line.matches("`").count() % 2 != 0 {
+            dbg!(&line);
             return Err(Error::UnevenNumberDollar);
         }
 
@@ -156,7 +160,7 @@ pub fn replace_inline_blocks(fragment_path: &Path, source: &str, references: &Ha
                         res
                     })
             } else {
-                Ok(elm.to_string())
+                Ok(format!("`{}`",elm))
             };
 
             generated_out

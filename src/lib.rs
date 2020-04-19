@@ -71,7 +71,7 @@ impl Preprocessor for Scientific {
             }
 
             // assets path
-            let asset_path = cfg.get("assets").map(|x| x.as_str().unwrap()).unwrap_or("");
+            let asset_path = cfg.get("assets").map(|x| x.as_str().unwrap()).unwrap_or("src/");
             let asset_path = ctx.root.join(asset_path);
 
             book.for_each_mut(|item| {
@@ -115,7 +115,6 @@ impl Preprocessor for Scientific {
             }
 
             for fragment in used_fragments {
-                dbg!(&fragment);
                 fs::copy(fragment_path.join(&fragment), dest.join(&fragment)).unwrap();
             }
 
