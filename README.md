@@ -41,6 +41,8 @@ $$
 ```
 and then cross-reference with `$ref:fig:<name>$`.
 
+If block is empty, then the preprocessor looks into the `assets` path specified in the configuration. So for a block `$$latex, legendrepoly, Legendre Polynomials$$` it looks for the file `src/legendrepoly.tex`.
+
 The BibTeX file referenced in the configuration file is added as a additional chapter and citations can be generated with `$ref:bib:<name>$`.
 
 ## Should I use this
