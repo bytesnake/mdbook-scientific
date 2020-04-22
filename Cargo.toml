@@ -13,3 +13,4 @@ serde = "*"
 serde_json = "*"
 sha2 = "*"
 nom-bibtex = "*"
+which = { version = "3", default-features = false }

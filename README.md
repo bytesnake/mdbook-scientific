@@ -1,12 +1,5 @@
 # Scientific mdbook plugin
-This plugin adds functionality to `mdbook` for scientific application. It allows the writer to generate named LaTeX :
-````
-```latex, <name>, <subtitle>
-...
-```
-````
-
-and then cross-reference with `` `ref:fig:<name>` ``.
+This plugin adds functionality to `mdbook` for scientific application. It allows the writer to generate named LaTeX, named Gnuplots and supports `bibtex` files. Further cross-referencing in text to equation, figures or literature is possible. A sample output can be seen [here](https://bytesnake.github.io/mdbook_example/).
 
 ## Install
 
@@ -24,6 +17,31 @@ assets = "src/"
 additional-css = ["src/scientific.css"]
 ```
 
-## Should I use this
-Nope, it's still in its infancy. Please don't use it yet 
+For latex rendering `latex` and `dvisvgm` are required. For gnuplot rendering the `gnuplot` binary.
 
+## Syntax
+
+For block equation rendering use the following syntax
+
+```
+$$equation, <name>
+...
+$$
+```
+
+the `equation` identifier is only needed if you want to name the equation block. You can cross-reference it then with `$ref:equ:<name>$` in the whole `mdbook`.
+
+The same syntax is working with `latex` and `gnuplot` figures, both are requiring a subtitle for the plot. Further a `gnuplotonly` figure only uses Gnuplot to render the file to SVG.
+
+Example for gnuplot rendering
+```
+$$gnuplot, <name>, <subtitle>
+...
+$$
+```
+and then cross-reference with `$ref:fig:<name>$`.
+
+The BibTeX file referenced in the configuration file is added as a additional chapter and citations can be generated with `$ref:bib:<name>$`.
+
+## Should I use this
+Nope, it's still in its infancy. Please don't use it yet. 

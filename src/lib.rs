@@ -74,6 +74,7 @@ impl Preprocessor for Scientific {
             let asset_path = cfg.get("assets").map(|x| x.as_str().unwrap()).unwrap_or("src/");
             let asset_path = ctx.root.join(asset_path);
 
+            // process blocks like `$$ .. $$`
             book.for_each_mut(|item| {
                 if error.is_some() {
                     return;
@@ -89,6 +90,7 @@ impl Preprocessor for Scientific {
                 }
             });
 
+            // process inline blocks like `$ .. $`
             book.for_each_mut(|item| {
                 if error.is_some() {
                     return;
@@ -108,12 +110,13 @@ impl Preprocessor for Scientific {
                 return Err(err.into());
             }
 
-            // copy all used fragments to `assets`
+            // the output path is `src/assets`, which get copied to the output directory
             let dest = ctx.root.join("src").join("assets");
             if !dest.exists() {
                 fs::create_dir_all(&dest).unwrap();
             }
 
+            // copy all fragments
             for fragment in used_fragments {
                 fs::copy(fragment_path.join(&fragment), dest.join(&fragment)).unwrap();
             }

@@ -1,13 +1,13 @@
-use std::fs::{self, File};
-use std::io::Write;
+use std::{str, usize, io::Write};
 use std::path::Path;
+use std::fs::{self, File};
 use std::process::{Command, Stdio};
-use std::{str, usize};
-
-use crate::error::{Error, Result};
 
 use sha2::{Digest, Sha256};
 
+use crate::error::{Error, Result};
+
+/// Convert input string to 24 character hash
 pub fn hash(input: &str) -> String {
     let mut sh = Sha256::new();
     sh.input(input.as_bytes());
@@ -16,6 +16,7 @@ pub fn hash(input: &str) -> String {
     out
 }
 
+/// Generate SVG file from latex file with given zoom
 pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
     let dest_path = path.parent().unwrap();
     let file: &Path = path.file_name().unwrap().as_ref();
@@ -23,7 +24,10 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
     // use latex to generate a dvi
     let dvi_path = path.with_extension("dvi");
     if !dvi_path.exists() {
-        let cmd = Command::new("/usr/bin/latex")
+        let latex_path = which::which("latex")
+            .map_err(|err| Error::BinaryNotFound(err))?;
+
+        let cmd = Command::new(latex_path)
             .current_dir(&dest_path)
             //.arg("--jobname").arg(&dvi_path)
             .arg(&file.with_extension("tex"))
@@ -73,7 +77,10 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
     // convert the dvi to a svg file with the woff font format
     let svg_path = path.with_extension("svg");
     if !svg_path.exists() && dvi_path.exists() {
-        let cmd = Command::new("/usr/bin/dvisvgm")
+        let dvisvgm_path = which::which("dvisvgm")
+            .map_err(|err| Error::BinaryNotFound(err))?;
+
+        let cmd = Command::new(dvisvgm_path)
             .current_dir(&dest_path)
             .arg("-b")
             .arg("1")
@@ -92,8 +99,15 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
     Ok(())
 }
 
+/// Generate latex file from gnuplot
+///
+/// This function generates a latex file with gnuplot `epslatex` backend and then source it into
+/// the generate latex function
 fn generate_latex_from_gnuplot(dest_path: &Path, content: &str, filename: &str) -> Result<()> {
-    let cmd = Command::new("/usr/bin/gnuplot")
+    let gnuplot_path = which::which("gnuplot")
+        .map_err(|err| Error::BinaryNotFound(err))?;
+
+    let cmd = Command::new(gnuplot_path)
         .stdin(Stdio::piped())
         .current_dir(dest_path)
         .arg("-p")
@@ -102,6 +116,7 @@ fn generate_latex_from_gnuplot(dest_path: &Path, content: &str, filename: &str) 
     //.expect("Could not spawn gnuplot");
 
     let mut stdin = cmd.stdin.unwrap();
+
     stdin
         .write_all(&format!("set output '{}.tex'\n", filename).as_bytes())
         .map_err(|err| Error::Io(err))?;
@@ -115,6 +130,7 @@ fn generate_latex_from_gnuplot(dest_path: &Path, content: &str, filename: &str) 
     Ok(())
 }
 
+/// Parse an equation with the given zoom
 pub fn parse_equation(
     dest_path: &Path,
     content: &str,
@@ -142,6 +158,7 @@ pub fn parse_equation(
     Ok(format!("{}.svg", name))
 }
 
+/// Parse a latex content and convert it to a SVG file
 pub fn parse_latex(
     dest_path: &Path,
     content: &str,
@@ -162,6 +179,7 @@ pub fn parse_latex(
     Ok(format!("{}.svg", name))
 }
 
+/// Parse a gnuplot file and generate a SVG file
 pub fn parse_gnuplot(
     dest_path: &Path,
     content: &str,
@@ -178,25 +196,10 @@ pub fn parse_gnuplot(
         generate_svg_from_latex(&path, 1.0)?;
     }
 
-
-        /*let path_tex = path.with_extension("tex");
-        let mut file = File::create(path_tex).map_err(|err| Error::Io(err))?;
-
-        file.write_all("\\documentclass[preview]{standalone}\n\\usepackage{graphicx}\n\\usepackage{amsmath}\n\\begin{document}\n".as_bytes())
-            .map_err(|err| Error::Io(err))?;
-
-        file.write_all(&format!("\\input{{{}.tex}}\n", name_plot).as_bytes())
-            .map_err(|err| Error::Io(err))?;
-
-        file.write_all("\\end{document}".as_bytes())
-            .map_err(|err| Error::Io(err))?;
-
-        generate_svg_from_latex(&path, 1.0)?;
-    }*/
-
     Ok(format!("{}.svg", name))
 }
 
+/// Parse gnuplot without using the latex backend
 pub fn parse_gnuplot_only(
     dest_path: &Path,
     content: &str,
@@ -205,9 +208,9 @@ pub fn parse_gnuplot_only(
     let path = dest_path.join(&name);
 
     if !path.with_extension("svg").exists() {
-        //let name_plot = format!("{}", name);
-
-        let cmd = Command::new("/usr/bin/gnuplot")
+        let gnuplot_path = which::which("gnuplot")
+            .map_err(|err| Error::BinaryNotFound(err))?;
+        let cmd = Command::new(gnuplot_path)
             .stdin(Stdio::piped())
             .current_dir(dest_path)
             .arg("-p")
@@ -233,13 +236,10 @@ pub fn parse_gnuplot_only(
     Ok(format!("{}.svg", name))
 }
 
+/// Generate html from BibTeX file using `bib2xhtml`
 pub fn bib_to_html(source: &str, bib2xhtml: &str) -> Result<String> {
     let source = fs::canonicalize(source).unwrap();
     let bib2xhtml = Path::new(bib2xhtml);
-
-    if !bib2xhtml.exists() {
-        return Err(Error::InvalidBibliography("path to bib2xhtml not found!".into()));
-    }
 
     //./bib2xhtml.pl -s alpha -u -U ~/Documents/Bachelor_thesis/literature.bib
     let cmd = Command::new(bib2xhtml.join("./bib2xhtml.pl"))

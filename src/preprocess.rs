@@ -1,9 +1,12 @@
 use std::fs;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::fragments;
 use crate::error::{Error, Result};
+
+const BLOCK_DELIM: &str = "$$";
+const INLINE_BLOCK_DELIM: &str = "$";
 
 pub fn replace_blocks(fragment_path: &Path, asset_path: &Path, source: &str, head_num: &str, used_fragments: &mut Vec<String>, references: &mut HashMap<String, String>) -> Result<String> {
     let mut content = String::new();
@@ -33,7 +36,7 @@ pub fn replace_blocks(fragment_path: &Path, asset_path: &Path, source: &str, hea
     .filter_map(|line| {
         let line = line.trim();
 
-        if !line.starts_with("```") {
+        if !line.starts_with(BLOCK_DELIM) {
             if start_line.is_some() {
                 content.push_str(line);
                 content.push('\n');
@@ -41,8 +44,8 @@ pub fn replace_blocks(fragment_path: &Path, asset_path: &Path, source: &str, hea
             } else {
                 return Some(Ok(line.into()));
             }
-        } else if line.ends_with("```") && line.len() > 3{
-            // line starts and end with ```, set content to empty
+        } else if line.ends_with(BLOCK_DELIM) && line.len() > 3{
+            // line starts and end with BLOCK_DELIM, set content to empty
             start_line = Some(line.to_string());
             content = "".into();
         }
@@ -50,7 +53,7 @@ pub fn replace_blocks(fragment_path: &Path, asset_path: &Path, source: &str, hea
         if let Some(param) = start_line.take() {
             let elms = param.splitn(3, ",")
                 .map(|x| x.trim())
-                .map(|x| x.replace("```", ""))
+                .map(|x| x.replace(BLOCK_DELIM, ""))
                 .collect::<Vec<_>>();
 
             let elms = elms.iter().map(|x| x.as_str()).collect::<Vec<_>>();
@@ -80,18 +83,15 @@ pub fn replace_blocks(fragment_path: &Path, asset_path: &Path, source: &str, hea
                         .map(|file| add_object(file, refer, Some(title)))
                 },
 
-                ["equation"] | ["equ"] => {
-                    fragments::parse_equation(fragment_path, &content, 1.6)
-                        .map(|file| add_object(file, "", None))
-                },
-
                 ["equation", refer] | ["equ", refer] => {
                     fragments::parse_equation(fragment_path, &content, 1.6)
                         .map(|file| add_object(file, refer, None))
                 }
-                line => {
-                    Ok(format!("{}\n{}\n```", line.join(":"), content))
-                }
+
+                ["equation"] | ["equ"] | _ => {
+                    fragments::parse_equation(fragment_path, &content, 1.6)
+                        .map(|file| add_object(file, "", None))
+                },
             };
             content = "".into();
 
@@ -107,12 +107,11 @@ pub fn replace_blocks(fragment_path: &Path, asset_path: &Path, source: &str, hea
 
 pub fn replace_inline_blocks(fragment_path: &Path, source: &str, references: &HashMap<String, String>, used_fragments: &mut Vec<String>) -> Result<String> {
     source.split("\n").enumerate().map(|(line_num, line)| {
-        if line.matches("`").count() % 2 != 0 {
-            dbg!(&line);
+        if line.matches(INLINE_BLOCK_DELIM).count() % 2 != 0 {
             return Err(Error::UnevenNumberDollar);
         }
 
-        line.split("`").enumerate().map(|(i, elm)| {
+        line.split(INLINE_BLOCK_DELIM).enumerate().map(|(i, elm)| {
             if i % 2 == 0 {
                 return Ok(elm.to_string());
             }
@@ -145,22 +144,14 @@ pub fn replace_inline_blocks(fragment_path: &Path, source: &str, references: &Ha
                     _ =>         Err(Error::InvalidReference(format!("reference has wrong number of arguments `{}` in line {}", elms.len(), line_num)))
 
                 }
-            } else if elm.starts_with("equ:") {
-                let elms = elm.split(":").skip(1).collect::<Vec<&str>>();
-
-                if elms.len() != 1 {
-                    return Ok(elm.to_string());
-                }
-
-                fragments::parse_equation(fragment_path, elms[0], 1.3)
+            } else {
+                fragments::parse_equation(fragment_path, elm, 1.3)
                     .map(|filename| {
                         let res = format!("<object class=\"equation_inline\" data=\"assets/{}\" type=\"image/svg+xml\"></object>", filename);
                         used_fragments.push(filename);
 
                         res
                     })
-            } else {
-                Ok(format!("`{}`",elm))
             };
 
             generated_out
