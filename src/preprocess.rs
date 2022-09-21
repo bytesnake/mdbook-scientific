@@ -1,4 +1,5 @@
 use fs_err as fs;
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -31,7 +32,7 @@ pub fn replace_blocks(
                 format!("Figure {}{}", head_num, figures_counter),
             );
 
-            format!("<figure id=\"{}\" class=\"figure\"><object data=\"assets/{}\" type=\"image/svg+xml\"/></object><figcaption>Figure {}{} {}</figcaption></figure>", 
+            format!("<figure id=\"{}\" class=\"figure\"><object data=\"assets/{}\" type=\"image/svg+xml\"/></object><figcaption>Figure {}{} {}</figcaption></figure>",
                 refer, file, head_num, figures_counter, title)
         } else if !refer.is_empty() {
             equations_counter += 1;
@@ -122,15 +123,56 @@ pub fn replace_inline_blocks(
     references: &HashMap<String, String>,
     used_fragments: &mut Vec<String>,
 ) -> Result<String> {
-    source.split("\n").enumerate().map(|(line_num, line)| {
-        if line.matches(INLINE_BLOCK_DELIM).count() % 2 != 0 {
-            return Err(Error::UnevenNumberDollar);
+    let mut is_code_block = false;
+    source.lines().enumerate().map(|(line_num, line)| {
+// FIXME use a proper mardown parser, it's unfixable this way
+// i.e pre start and end in one line or multiple..
+        if line.starts_with("```") {
+            is_code_block = !is_code_block;
+            return Ok(line.to_owned());
         }
 
-        line.split(INLINE_BLOCK_DELIM).enumerate().map(|(i, elm)| {
+        if line.starts_with("<pre") {
+            is_code_block = true;
+            return Ok(line.to_owned())
+        }
+
+        if line.starts_with("</pre>") {
+            is_code_block = false;
+            return Ok(line.to_owned());
+        }
+
+        let mut is_intra_inline_code = false;
+        // use to collect ranges
+        let mut v = vec![-1_isize];
+        v.extend(line.chars().enumerate().filter_map(|(i,c)| {
+            match c {
+                '$' if !is_intra_inline_code => {
+                    return Some(i as isize);
+                }
+                '`' => {
+                    is_intra_inline_code = !is_intra_inline_code;
+                }
+                _ => {
+
+                }
+            }
+            None
+        }));
+
+        let last_idx = line.chars().count() as isize;
+        if Some(&last_idx) != v.last() {
+            v.push(last_idx);
+        }
+
+        v.into_iter().tuple_windows().enumerate().map(|(i,(start,end))| {
+            let start = std::cmp::min(start+1,end) as usize;
+            let end = end as usize;
             if i % 2 == 0 {
+                let elm = &line[start..end as usize];
                 return Ok(elm.to_string());
             }
+            let elm = dbg!(&line[dbg!(start..end)]);
 
             let generated_out = if elm.starts_with("ref:") {
                 let elms = elm.split(":").skip(1).collect::<Vec<&str>>();

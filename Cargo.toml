@@ -16,3 +16,4 @@ which = { version = "4", default-features = false }
 thiserror = "1"
 fs-err = "2.8"
 color-eyre = { version = "0.6.2", features = [] }
+itertools = "0.10"

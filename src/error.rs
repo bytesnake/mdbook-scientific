@@ -16,10 +16,14 @@ pub enum Error {
     #[error("Invalid dvi svgm {0}")]
     InvalidDvisvgm(String),
 
-    #[error(transparent)]
-    BinaryNotFound(#[from] which::Error),
+    #[error("Binary \"{binary}\" was not found using `which`")]
+    BinaryNotFound {
+        binary: String,
+        #[source]
+        error: which::Error,
+    },
 
-    #[error("Uneven number dollar")]
+    #[error("Uneven number of dollar signs found")]
     UnevenNumberDollar,
 
     #[error("Key section not found")]

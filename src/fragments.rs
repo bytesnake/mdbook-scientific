@@ -17,6 +17,13 @@ pub fn hash(input: &str) -> String {
     out
 }
 
+fn find_binary(name: &str) -> Result<std::path::PathBuf> {
+    which::which(name).map_err(|error| Error::BinaryNotFound {
+        binary: name.to_owned(),
+        error,
+    })
+}
+
 /// Generate SVG file from latex file with given zoom
 pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
     let dest_path = path.parent().expect("Parent path must exist. qed");
@@ -25,7 +32,7 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
     // use latex to generate a dvi
     let dvi_path = path.with_extension("dvi");
     if !dvi_path.exists() {
-        let latex_path = which::which("latex").map_err(|err| Error::BinaryNotFound(err))?;
+        let latex_path = find_binary("latex")?;
 
         let cmd = Command::new(latex_path)
             .current_dir(&dest_path)
@@ -77,7 +84,7 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
     // convert the dvi to a svg file with the woff font format
     let svg_path = path.with_extension("svg");
     if !svg_path.exists() && dvi_path.exists() {
-        let dvisvgm_path = which::which("dvisvgm").map_err(|err| Error::BinaryNotFound(err))?;
+        let dvisvgm_path = find_binary("dvisvgm")?;
 
         let cmd = Command::new(dvisvgm_path)
             .current_dir(&dest_path)
@@ -103,7 +110,7 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
 /// This function generates a latex file with gnuplot `epslatex` backend and then source it into
 /// the generate latex function
 fn generate_latex_from_gnuplot(dest_path: &Path, content: &str, filename: &str) -> Result<()> {
-    let gnuplot_path = which::which("gnuplot").map_err(|err| Error::BinaryNotFound(err))?;
+    let gnuplot_path = find_binary("gnuplot")?;
 
     let cmd = Command::new(gnuplot_path)
         .stdin(Stdio::piped())
@@ -141,8 +148,7 @@ pub fn parse_equation(dest_path: &Path, content: &str, zoom: f32) -> Result<Stri
 \usepackage{amsmath}
 \usepackage{amsfonts}
 \begin{document}
-$$
-"####
+$$"####
                 .as_bytes(),
         )?;
 
@@ -201,7 +207,7 @@ pub fn parse_gnuplot_only(dest_path: &Path, content: &str) -> Result<String> {
     let path = dest_path.join(&name);
 
     if !path.with_extension("svg").exists() {
-        let gnuplot_path = which::which("gnuplot").map_err(|err| Error::BinaryNotFound(err))?;
+        let gnuplot_path = find_binary("gnuplot")?;
         let cmd = Command::new(gnuplot_path)
             .stdin(Stdio::piped())
             .current_dir(dest_path)
