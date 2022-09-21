@@ -135,19 +135,30 @@ pub fn parse_equation(dest_path: &Path, content: &str, zoom: f32) -> Result<Stri
     if !path.with_extension("tex").exists() {
         let mut file = File::create(path.with_extension("tex")).map_err(|err| Error::Io(err))?;
 
-        file.write_all("\\documentclass[20pt, preview]{standalone}\n\\usepackage{amsmath}\\usepackage{amsfonts}\n\\begin{document}\n$$\n".as_bytes())
-            .map_err(|err| Error::Io(err))?;
+        file.write_all(
+            r####"
+\documentclass[20pt, preview]{standalone}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\begin{document}
+$$
+"####
+                .as_bytes(),
+        )?;
 
-        file.write_all(content.as_bytes())
-            .map_err(|err| Error::Io(err))?;
+        file.write_all(content.as_bytes())?;
 
-        file.write_all("$$\n\\end{document}".as_bytes())
-            .map_err(|err| Error::Io(err))?;
+        file.write_all(
+            r####"$$
+\end{document}
+"####
+                .as_bytes(),
+        )?;
     }
 
     generate_svg_from_latex(&path, zoom)?;
 
-    Ok(format!("{}.svg", name))
+    Ok(name + ".svg")
 }
 
 /// Parse a latex content and convert it to a SVG file
@@ -157,15 +168,14 @@ pub fn parse_latex(dest_path: &Path, content: &str) -> Result<String> {
 
     // create a new tex file containing the equation
     if !path.with_extension("tex").exists() {
-        let mut file = File::create(path.with_extension("tex")).map_err(|err| Error::Io(err))?;
+        let mut file = File::create(path.with_extension("tex"))?;
 
-        file.write_all(content.as_bytes())
-            .map_err(|err| Error::Io(err))?;
+        file.write_all(content.as_bytes())?;
     }
 
     generate_svg_from_latex(&path, 1.0)?;
 
-    Ok(format!("{}.svg", name))
+    Ok(name + ".svg")
 }
 
 /// Parse a gnuplot file and generate a SVG file
@@ -182,7 +192,7 @@ pub fn parse_gnuplot(dest_path: &Path, content: &str) -> Result<String> {
         generate_svg_from_latex(&path, 1.0)?;
     }
 
-    Ok(format!("{}.svg", name))
+    Ok(name + ".svg")
 }
 
 /// Parse gnuplot without using the latex backend

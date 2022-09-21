@@ -27,6 +27,10 @@ impl Preprocessor for Scientific {
         "scientific"
     }
 
+    fn supports_renderer(&self, renderer: &str) -> bool {
+        renderer != "not-supported"
+    }
+
     fn run(&self, ctx: &PreprocessorContext, book: Book) -> Result<Book, mdbook::errors::Error> {
         self.run_inner(ctx, book)
             .map_err(mdbook::errors::Error::new)
@@ -159,9 +163,5 @@ impl Scientific {
         } else {
             Err(Error::KeySectionNotFound)
         }
-    }
-
-    fn supports_renderer(&self, renderer: &str) -> bool {
-        renderer != "not-supported"
     }
 }
