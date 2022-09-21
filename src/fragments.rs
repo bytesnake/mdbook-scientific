@@ -1,7 +1,8 @@
-use std::{str, usize, io::Write};
+use fs::File;
+use fs_err as fs;
 use std::path::Path;
-use std::fs::{self, File};
 use std::process::{Command, Stdio};
+use std::{io::Write, str, usize};
 
 use sha2::{Digest, Sha256};
 
@@ -18,14 +19,13 @@ pub fn hash(input: &str) -> String {
 
 /// Generate SVG file from latex file with given zoom
 pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
-    let dest_path = path.parent().unwrap();
+    let dest_path = path.parent().expect("Parent path must exist. qed");
     let file: &Path = path.file_name().unwrap().as_ref();
 
     // use latex to generate a dvi
     let dvi_path = path.with_extension("dvi");
     if !dvi_path.exists() {
-        let latex_path = which::which("latex")
-            .map_err(|err| Error::BinaryNotFound(err))?;
+        let latex_path = which::which("latex").map_err(|err| Error::BinaryNotFound(err))?;
 
         let cmd = Command::new(latex_path)
             .current_dir(&dest_path)
@@ -77,8 +77,7 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
     // convert the dvi to a svg file with the woff font format
     let svg_path = path.with_extension("svg");
     if !svg_path.exists() && dvi_path.exists() {
-        let dvisvgm_path = which::which("dvisvgm")
-            .map_err(|err| Error::BinaryNotFound(err))?;
+        let dvisvgm_path = which::which("dvisvgm").map_err(|err| Error::BinaryNotFound(err))?;
 
         let cmd = Command::new(dvisvgm_path)
             .current_dir(&dest_path)
@@ -104,18 +103,15 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
 /// This function generates a latex file with gnuplot `epslatex` backend and then source it into
 /// the generate latex function
 fn generate_latex_from_gnuplot(dest_path: &Path, content: &str, filename: &str) -> Result<()> {
-    let gnuplot_path = which::which("gnuplot")
-        .map_err(|err| Error::BinaryNotFound(err))?;
+    let gnuplot_path = which::which("gnuplot").map_err(|err| Error::BinaryNotFound(err))?;
 
     let cmd = Command::new(gnuplot_path)
         .stdin(Stdio::piped())
         .current_dir(dest_path)
         .arg("-p")
-        .spawn()
-        .unwrap();
-    //.expect("Could not spawn gnuplot");
+        .spawn()?;
 
-    let mut stdin = cmd.stdin.unwrap();
+    let mut stdin = cmd.stdin.expect("Stdin of gnuplot spawn must exist. qed");
 
     stdin
         .write_all(&format!("set output '{}.tex'\n", filename).as_bytes())
@@ -131,11 +127,7 @@ fn generate_latex_from_gnuplot(dest_path: &Path, content: &str, filename: &str) 
 }
 
 /// Parse an equation with the given zoom
-pub fn parse_equation(
-    dest_path: &Path,
-    content: &str,
-    zoom: f32,
-) -> Result<String> {
+pub fn parse_equation(dest_path: &Path, content: &str, zoom: f32) -> Result<String> {
     let name = hash(content);
     let path = dest_path.join(&name);
 
@@ -159,10 +151,7 @@ pub fn parse_equation(
 }
 
 /// Parse a latex content and convert it to a SVG file
-pub fn parse_latex(
-    dest_path: &Path,
-    content: &str,
-) -> Result<String> {
+pub fn parse_latex(dest_path: &Path, content: &str) -> Result<String> {
     let name = hash(content);
     let path = dest_path.join(&name);
 
@@ -180,10 +169,7 @@ pub fn parse_latex(
 }
 
 /// Parse a gnuplot file and generate a SVG file
-pub fn parse_gnuplot(
-    dest_path: &Path,
-    content: &str,
-) -> Result<String> {
+pub fn parse_gnuplot(dest_path: &Path, content: &str) -> Result<String> {
     let name = hash(content);
     let path = dest_path.join(&name);
 
@@ -200,16 +186,12 @@ pub fn parse_gnuplot(
 }
 
 /// Parse gnuplot without using the latex backend
-pub fn parse_gnuplot_only(
-    dest_path: &Path,
-    content: &str,
-) -> Result<String> {
+pub fn parse_gnuplot_only(dest_path: &Path, content: &str) -> Result<String> {
     let name = hash(content);
     let path = dest_path.join(&name);
 
     if !path.with_extension("svg").exists() {
-        let gnuplot_path = which::which("gnuplot")
-            .map_err(|err| Error::BinaryNotFound(err))?;
+        let gnuplot_path = which::which("gnuplot").map_err(|err| Error::BinaryNotFound(err))?;
         let cmd = Command::new(gnuplot_path)
             .stdin(Stdio::piped())
             .current_dir(dest_path)
@@ -255,7 +237,8 @@ pub fn bib_to_html(source: &str, bib2xhtml: &str) -> Result<String> {
     if err_str.contains("error messages)") {
         Err(Error::InvalidBibliography(err_str.to_string()))
     } else {
-        let buf = buf.split("\n")
+        let buf = buf
+            .split("\n")
             .skip_while(|x| *x != "<dl class=\"bib2xhtml\">")
             .take_while(|x| *x != "</dl>")
             .map(|x| x.replace("<a name=\"", "<a id=\""))

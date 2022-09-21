@@ -1,16 +1,18 @@
 [package]
 name = "mdbook-scientific"
-version = "0.1.0"
-authors = ["Lorenz Schmidt <bytesnake@mailbox.org>"]
-edition = "2018"
+version = "0.2.0"
+authors = ["Bernhard Schuster", "Lorenz Schmidt <bytesnake@mailbox.org>"]
+edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-mdbook = { version = "0.3", default-features = false }
-clap = "*"
-serde = "*"
-serde_json = "*"
-sha2 = "*"
-nom-bibtex = "*"
-which = { version = "3", default-features = false }
+mdbook = { version = "0.4.21", default-features = false }
+clap = "3"
+serde = "1"
+serde_json = "1"
+sha2 = "0.10.6"
+nom-bibtex = "0.3"
+which = { version = "4", default-features = false }
+thiserror = "1"
+fs-err = "2.8"
+color-eyre = { version = "0.6.2", features = [] }
