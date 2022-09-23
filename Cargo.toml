@@ -1,8 +1,12 @@
 [package]
 name = "mdbook-scientific"
-version = "0.2.0"
-authors = ["Bernhard Schuster", "Lorenz Schmidt <bytesnake@mailbox.org>"]
+version = "0.2.1"
+authors = ["Bernhard Schuster <bernhard@ahoi.io>", "Lorenz Schmidt <bytesnake@mailbox.org>"]
 edition = "2021"
+license = "GPL-3.0"
+description = "Enables inline equations for mdbook to set by $..$ signs and $$..$$"
+keywords =["mdbook", "scientific", "equation"]
+repository = "https://github.com/drahnr/mdbook-scientific"
 
 
 [dependencies]
