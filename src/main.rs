@@ -7,7 +7,9 @@ use std::process;
 
 pub fn make_app() -> App<'static> {
     App::new("scientific")
-        .about("A mdbook preprocessor which handles formulae, figures wrapped in `$` and `$$` signs")
+        .about(
+            "A mdbook preprocessor which handles formulae, figures wrapped in `$` and `$$` signs",
+        )
         .subcommand(
             SubCommand::with_name("supports")
                 .arg(Arg::with_name("renderer").required(true))
