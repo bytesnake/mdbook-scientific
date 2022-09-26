@@ -172,7 +172,7 @@ pub fn replace_inline_blocks(
                 let elm = &line[start..end as usize];
                 return Ok(elm.to_string());
             }
-            let elm = dbg!(&line[dbg!(start..end)]);
+            let elm = &line[start..end];
 
             let generated_out = if elm.starts_with("ref:") {
                 let elms = elm.split(":").skip(1).collect::<Vec<&str>>();

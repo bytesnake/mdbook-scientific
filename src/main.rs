@@ -6,8 +6,8 @@ use std::io;
 use std::process;
 
 pub fn make_app() -> App<'static> {
-    App::new("scientifica")
-        .about("A mdbook preprocessor which handles $ signs")
+    App::new("scientific")
+        .about("A mdbook preprocessor which handles formulae, figures wrapped in `$` and `$$` signs")
         .subcommand(
             SubCommand::with_name("supports")
                 .arg(Arg::with_name("renderer").required(true))
@@ -31,8 +31,6 @@ fn main() -> color_eyre::eyre::Result<()> {
 }
 
 fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<()> {
-    eprintln!("Hey! 1");
-
     let (ctx, book) = CmdPreprocessor::parse_input(io::stdin()).map_err(Error::MdBook)?;
 
     if ctx.mdbook_version != mdbook::MDBOOK_VERSION {
@@ -47,11 +45,7 @@ fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<()> {
         );
     }
 
-    eprintln!("Hey! 2");
-
     let processed_book = pre.run(&ctx, book)?;
-
-    eprintln!("Hey! 3");
 
     serde_json::to_writer(io::stdout(), &processed_book)?;
 
