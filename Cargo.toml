@@ -1,6 +1,6 @@
 [package]
 name = "mdbook-scientific"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Bernhard Schuster <bernhard@ahoi.io>", "Lorenz Schmidt <bytesnake@mailbox.org>"]
 edition = "2021"
 license = "GPL-3.0"
