@@ -32,7 +32,7 @@ pub fn replace_blocks(
                 format!("Figure {}{}", head_num, figures_counter),
             );
 
-            format!("<figure id=\"{}\" class=\"figure\"><object data=\"assets/{}\" type=\"image/svg+xml\"/></object><figcaption>Figure {}{} {}</figcaption></figure>",
+            format!(r#"<figure id="{}" class="figure"><object data="assets/{}" type="image/svg+xml"/></object><figcaption>Figure {}{} {}</figcaption></figure>"#,
                 refer, file, head_num, figures_counter, title)
         } else if !refer.is_empty() {
             equations_counter += 1;
@@ -40,15 +40,15 @@ pub fn replace_blocks(
                 refer.to_string(),
                 format!("{}{}", head_num, equations_counter),
             );
-            format!("<div id=\"{}\" class=\"equation\"><div class=\"equation_inner\"><object data=\"assets/{}\" type=\"image/svg+xml\"></object></div><span>({}{})</span></div>\n", refer, file, head_num, equations_counter)
+            format!(r#"<div id="{}" class="equation"><div class="equation_inner"><object data="assets/{}" type="image/svg+xml"></object></div><span>({}{})</span></div>\n"#, refer, file, head_num, equations_counter)
         } else {
-            format!("<div class=\"equation\"><div class=\"equation_inner\"><object data=\"assets/{}\" type=\"image/svg+xml\"></object></div></div>\n", file)
+            format!(r#"<div class="equation"><div class="equation_inner"><object data="assets/{}" type="image/svg+xml"></object></div></div>\n"#, file)
         }
     };
 
     let mut acc = Vec::<String>::with_capacity(100);
 
-    for line in source.lines() {
+    for (lineno, line) in source.lines().enumerate() {
         let line = line.trim();
 
         if !line.starts_with(BLOCK_DELIM) {
@@ -185,18 +185,18 @@ pub fn replace_inline_blocks(
                 match &elms[..] {
                     ["fig", refere] => {
                         references.get::<str>(refere)
-                            .ok_or(Error::InvalidReference(format!("could not find reference to `{}` in line {}", elms[1], line_num)))
-                            .map(|x| format!("<a class=\"fig_ref\" href='#{}'>{}</a>", elms[1], x))
+                            .ok_or(Error::InvalidReference(format!(r#"could not find reference to `{}` in line {}"#, elms[1], line_num)))
+                            .map(|x| format!(r#"<a class="fig_ref" href='#{}'>{}</a>"#, elms[1], x))
                     },
                     ["bib", refere] => {
                         references.get::<str>(refere)
                             .ok_or(Error::InvalidReference(format!("could not find reference to `{}` in line {}", elms[1], line_num)))
-                            .map(|x| format!("<a class=\"bib_ref\" href='bibliography.html#{}'>{}</a>", elms[1], x))
+                            .map(|x| format!(r#"<a class="bib_ref" href='bibliography.html#{}'>{}</a>"#, elms[1], x))
                     },
                     ["equ", refere] => {
                         references.get::<str>(refere)
                             .ok_or(Error::InvalidReference(format!("could not find reference to `{}` in line {}", elms[1], line_num)))
-                            .map(|x| format!("<a class=\"equ_ref\" href='#{}'>Eq. ({})</a>", elms[1], x))
+                            .map(|x| format!(r#"<a class="equ_ref" href='#{}'>Eq. ({})</a>"#, elms[1], x))
                     },
                     [kind, _] => Err(Error::InvalidReference(format!("unknown reference type of `{}` in line {}", kind, line_num))),
                     _ =>         Err(Error::InvalidReference(format!("reference has wrong number of arguments `{}` in line {}", elms.len(), line_num)))
@@ -205,7 +205,7 @@ pub fn replace_inline_blocks(
             } else {
                 fragments::parse_equation(fragment_path, elm, 1.3)
                     .map(|filename| {
-                        let res = format!("<object class=\"equation_inline\" data=\"assets/{}\" type=\"image/svg+xml\"></object>", filename);
+                        let res = format!(r#"<object class="equation_inline" data="assets/{}" type="image/svg+xml"></object>"#, filename);
                         used_fragments.push(filename);
 
                         res
