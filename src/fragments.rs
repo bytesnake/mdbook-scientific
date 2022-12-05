@@ -7,11 +7,12 @@ use std::{io::Write, str, usize};
 use sha2::{Digest, Sha256};
 
 use crate::error::{Error, Result};
+use crate::preprocess::Content;
 
 /// Convert input string to 24 character hash
-pub fn hash(input: &str) -> String {
+pub fn hash(input: impl AsRef<str>) -> String {
     let mut sh = Sha256::new();
-    sh.update(input.as_bytes());
+    sh.update(input.as_ref().as_bytes());
     let mut out = format!("{:x}", sh.finalize());
     out.truncate(24);
     out
@@ -109,7 +110,12 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
 ///
 /// This function generates a latex file with gnuplot `epslatex` backend and then source it into
 /// the generate latex function
-fn generate_latex_from_gnuplot(dest_path: &Path, content: &str, filename: &str) -> Result<()> {
+fn generate_latex_from_gnuplot<'a>(
+    dest_path: &Path,
+    content: &Content<'a>,
+    filename: &str,
+) -> Result<()> {
+    let content = content.as_ref();
     let gnuplot_path = find_binary("gnuplot")?;
 
     let cmd = Command::new(gnuplot_path)
@@ -134,10 +140,21 @@ fn generate_latex_from_gnuplot(dest_path: &Path, content: &str, filename: &str) 
 }
 
 /// Parse an equation with the given zoom
-pub fn parse_equation(dest_path: &Path, content: &str, zoom: f32) -> Result<String> {
+pub fn parse_equation<'a>(dest_path: &Path, content: &Content<'a>, zoom: f32) -> Result<String> {
     let name = hash(content);
     let path = dest_path.join(&name);
 
+    eprintln!(
+        r#"Found equation from {}:{}..{}:{}:
+    {}"#,
+        content.start.lineno,
+        content.start.column,
+        content.end.lineno,
+        content.end.column,
+        content.s
+    );
+
+    let content = content.as_ref();
     // create a new tex file containing the equation
     if !path.with_extension("tex").exists() {
         let mut file = File::create(path.with_extension("tex")).map_err(|err| Error::Io(err))?;
@@ -174,7 +191,8 @@ $$"####
 }
 
 /// Parse a latex content and convert it to a SVG file
-pub fn parse_latex(dest_path: &Path, content: &str) -> Result<String> {
+pub fn parse_latex<'a>(dest_path: &Path, content: &Content<'a>) -> Result<String> {
+    let content = content.as_ref();
     let name = hash(content);
     let path = dest_path.join(&name);
 
@@ -191,7 +209,7 @@ pub fn parse_latex(dest_path: &Path, content: &str) -> Result<String> {
 }
 
 /// Parse a gnuplot file and generate a SVG file
-pub fn parse_gnuplot(dest_path: &Path, content: &str) -> Result<String> {
+pub fn parse_gnuplot<'a>(dest_path: &Path, content: &Content<'a>) -> Result<String> {
     let name = hash(content);
     let path = dest_path.join(&name);
 
@@ -208,7 +226,8 @@ pub fn parse_gnuplot(dest_path: &Path, content: &str) -> Result<String> {
 }
 
 /// Parse gnuplot without using the latex backend
-pub fn parse_gnuplot_only(dest_path: &Path, content: &str) -> Result<String> {
+pub fn parse_gnuplot_only<'a>(dest_path: &Path, content: &Content<'a>) -> Result<String> {
+    let content = content.as_ref();
     let name = hash(content);
     let path = dest_path.join(&name);
 
