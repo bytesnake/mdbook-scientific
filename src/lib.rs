@@ -149,7 +149,7 @@ impl Scientific {
             error?;
 
             // the output path is `src/assets`, which get copied to the output directory
-            let dest = ctx.root.join("src").join("assets");
+            let dest = ctx.root.join("src").join("storage").join("assets");
             if !dest.exists() {
                 fs::create_dir_all(&dest)?;
             }
