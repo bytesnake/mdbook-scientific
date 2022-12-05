@@ -59,7 +59,7 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
                 })
                 .fold(("", "", usize::MAX), |mut err, elm| {
                     if elm.starts_with("! ") {
-                        err.0 = elm;
+                        err.0 = &elm[2..];
                     } else if elm.starts_with("l.") {
                         let mut elms = elm[2..].splitn(2, " ").map(|x| x.trim());
                         if let Some(Ok(val)) = elms.next().map(|x| x.parse::<usize>()) {

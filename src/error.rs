@@ -13,13 +13,13 @@ pub enum Error {
     #[error("Invalid math: {0} {1} at line {2}")]
     InvalidMath(String, String, usize),
 
-    #[error("Invalid math {0}")]
+    #[error("Invalid reference: {0}")]
     InvalidReference(String),
 
-    #[error("Invalid bibliography {0}")]
+    #[error("Invalid bibliography: {0}")]
     InvalidBibliography(String),
 
-    #[error("Invalid dvi svgm {0}")]
+    #[error("Invalid dvi svgm: {0}")]
     InvalidDvisvgm(String),
 
     #[error("Binary \"{binary}\" was not found using `which`")]
@@ -41,12 +41,12 @@ pub enum Error {
     #[error("Bibliography {0}")]
     BibliographyMissing(String),
 
-    #[error("Bibliography parsing error")]
+    #[error(transparent)]
     BibliographyParsingFailed(#[from] BibtexError),
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
 
-    #[error("MdBook")]
+    #[error(transparent)]
     MdBook(#[from] mdbook::errors::Error),
 }
