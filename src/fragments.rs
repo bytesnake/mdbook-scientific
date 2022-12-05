@@ -145,8 +145,14 @@ pub fn parse_equation(dest_path: &Path, content: &str, zoom: f32) -> Result<Stri
         file.write_all(
             r####"
 \documentclass[20pt, preview]{standalone}
+
 \usepackage{amsmath}
 \usepackage{amsfonts}
+\usepackage{mathtools}
+
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+
 \begin{document}
 $$"####
                 .as_bytes(),
