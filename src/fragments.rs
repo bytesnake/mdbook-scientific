@@ -1,5 +1,7 @@
 use fs::File;
 use fs_err as fs;
+use itertools::Itertools;
+use std::borrow::Cow;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::{io::Write, str, usize};
@@ -159,30 +161,17 @@ pub fn parse_equation<'a>(dest_path: &Path, content: &Content<'a>, zoom: f32) ->
     if !path.with_extension("tex").exists() {
         let mut file = File::create(path.with_extension("tex")).map_err(|err| Error::Io(err))?;
 
-        file.write_all(
-            r####"
-\documentclass[20pt, preview]{standalone}
-
-\usepackage{amsmath}
-\usepackage{amsfonts}
-\usepackage{mathtools}
-
-\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
-\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
-
-\begin{document}
-$$"####
-                .as_bytes(),
-        )?;
+        let content = include_str!("fragment.tex")
+            .split("$$")
+            .enumerate()
+            .map(|(idx, s)| match idx {
+                0 | 2 => s,
+                1 => content,
+                _ => unreachable!("fragment.tex must have exactly 2 instances of `$$`"),
+            })
+            .join("$$");
 
         file.write_all(content.as_bytes())?;
-
-        file.write_all(
-            r####"$$
-\end{document}
-"####
-                .as_bytes(),
-        )?;
     }
 
     generate_svg_from_latex(&path, zoom)?;
