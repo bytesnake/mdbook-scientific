@@ -85,6 +85,8 @@ pub fn replace_blocks(
         }
     };
 
+    fs::create_dir_all(&fragment_path)?;
+
     let mut acc = Vec::<String>::with_capacity(100);
 
     for (lineno, line) in source.lines().enumerate() {
