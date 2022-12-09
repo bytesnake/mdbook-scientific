@@ -28,7 +28,9 @@ impl Preprocessor for Scientific {
     }
 
     fn supports_renderer(&self, renderer: &str) -> bool {
-        renderer != "not-supported"
+        dbg!(renderer) != "not-supported"
+            || !renderer.ends_with("latex")
+            || !renderer.ends_with("tectonic")
     }
 
     fn run(&self, ctx: &PreprocessorContext, book: Book) -> Result<Book, mdbook::errors::Error> {
@@ -131,8 +133,8 @@ impl Scientific {
                     let _head_number = ch
                         .number
                         .as_ref()
-                        .map(|x| format!("{}", x))
-                        .unwrap_or("".into());
+                        .map(ToString::to_string)
+                        .unwrap_or_default();
 
                     match replace_inline_blocks(
                         &fragment_path,

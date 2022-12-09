@@ -1,7 +1,6 @@
 use fs::File;
 use fs_err as fs;
 use itertools::Itertools;
-use std::borrow::Cow;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::{io::Write, str, usize};

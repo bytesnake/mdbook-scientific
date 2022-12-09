@@ -1,31 +1,38 @@
-use clap::{App, Arg, ArgMatches, SubCommand};
+use clap::Parser;
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor};
 use mdbook_scientific::error::*;
 use mdbook_scientific::Scientific;
 use std::io;
 use std::process;
 
-pub fn make_app() -> App<'static> {
-    App::new("scientific")
-        .about(
-            "A mdbook preprocessor which handles formulae, figures wrapped in `$` and `$$` signs",
-        )
-        .subcommand(
-            SubCommand::with_name("supports")
-                .arg(Arg::with_name("renderer").required(true))
-                .about("Check whether a renderer is supported by this preprocessor"),
-        )
+#[derive(clap::Parser, Debug)]
+#[command(
+    author,
+    version,
+    about,
+    long_about = "A mdbook preprocessor which handles formulae, figures wrapped in `$` and `$$` signs"
+)]
+struct Args {
+    #[command(subcommand)]
+    supports: Option<Sub>,
+}
+
+#[derive(clap::Subcommand, Debug)]
+#[doc = "Check whether a renderer is supported by this preprocessor"]
+enum Sub {
+    Supports { renderer: String },
 }
 
 fn main() -> color_eyre::eyre::Result<()> {
+    eprintln!("INVOKE MDBOOK SCIENTIFIC!");
     color_eyre::install()?;
 
-    let matches = make_app().get_matches();
+    let args = Args::try_parse()?;
 
     let preprocessor = Scientific::new();
 
-    if let Some(sub_args) = matches.subcommand_matches("supports") {
-        handle_supports(&preprocessor, sub_args);
+    if let Some(Sub::Supports { ref renderer }) = args.supports {
+        handle_supports(&preprocessor, renderer);
     } else {
         handle_preprocessing(&preprocessor).map_err(Error::from)?;
     }
@@ -56,16 +63,44 @@ fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<()> {
     Ok(())
 }
 
-fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
-    let renderer = sub_args
-        .value_of("renderer")
-        .expect("Required argument \"renderer\" is provided by mdbook. qed");
-    let supported = pre.supports_renderer(&renderer);
+fn handle_supports(pre: &dyn Preprocessor, renderer: impl AsRef<str>) -> ! {
+    let supported = pre.supports_renderer(renderer.as_ref());
 
     // Signal whether the renderer is supported by exiting with 1 or 0.
     if supported {
         process::exit(0);
     } else {
         process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use assert_matches::assert_matches;
+
+    #[test]
+    fn clap_supports() {
+        assert_matches!(
+            Args::try_parse_from(vec!["mdbook-scientific", "supports"]),
+            Err(_)
+        );
+        assert_matches!(Args::try_parse_from(vec!["mdbook-scientific", "supports", "tectonic"]).unwrap(),
+        Args {
+            supports: Some(Sub::Supports{ renderer }),
+            ..
+        } => {
+            assert_eq!(renderer, "tectonic");
+        });
+    }
+
+    #[test]
+    fn clap_supports_no_sub() {
+        assert_matches!(Args::try_parse_from(vec!["mdbook-scientific"]).unwrap(),
+        Args {
+            supports: None,
+            ..
+        } => {
+        });
     }
 }

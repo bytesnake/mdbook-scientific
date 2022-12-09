@@ -1,6 +1,6 @@
 [package]
 name = "mdbook-scientific"
-version = "0.2.2"
+version = "0.2.3"
 authors = [
   "Bernhard Schuster <bernhard@ahoi.io>",
   "Lorenz Schmidt <bytesnake@mailbox.org>",
@@ -13,8 +13,8 @@ repository = "https://github.com/drahnr/mdbook-scientific"
 
 
 [dependencies]
-mdbook = { version = "0.4.21", default-features = false }
-clap = "3"
+mdbook = { version = "0.4", default-features = false }
+clap = { version = "4", features = ["derive"] }
 serde = "1"
 serde_json = "1"
 sha2 = "0.10.6"
