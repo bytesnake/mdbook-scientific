@@ -1,38 +1,102 @@
 use fs_err as fs;
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use crate::error::{Error, Result};
+use crate::errors::{Error, Result};
 use crate::fragments;
+use crate::types::*;
 
 const BLOCK_DELIM: &str = "$$";
 const INLINE_BLOCK_DELIM: &str = "$";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct LiCo {
-    /// Base 1 line number
-    pub lineno: usize,
-    /// Base 1 column number
-    pub column: usize,
-}
-
-pub struct Content<'a> {
-    pub s: &'a str,
-    pub start: LiCo,
-    pub end: LiCo,
-}
-
-impl<'a> AsRef<str> for Content<'a> {
-    fn as_ref(&self) -> &str {
-        self.s
+pub fn format_figure<'a>(
+    replacement: &Replacement<'a>,
+    refer: &str,
+    head_num: &str,
+    figures_counter: usize,
+    title: &str,
+    renderer: SupportedRenderer,
+) -> String {
+    use SupportedRenderer::*;
+    match renderer {
+        Html | Markdown => {
+            format!(
+                r#"<figure id="{refer}" class="figure">
+                    <object data="assets/{file}" type="image/svg+xml"/></object>
+                    <figcaption>Figure {head_num}{figures_counter} {title}</figcaption>
+                </figure>"#,
+                refer = refer,
+                head_num = head_num,
+                figures_counter = figures_counter,
+                title = title,
+                file = replacement.svg.display()
+            )
+        }
+        Latex | Tectonic => {
+            format!(r#"\[{}\]"#, replacement.intermediate())
+        }
     }
 }
 
-impl<'a> std::ops::Deref for Content<'a> {
-    type Target = &'a str;
-    fn deref(&self) -> &Self::Target {
-        &self.s
+pub fn format_equation_block<'a>(
+    replacement: &Replacement<'a>,
+    refer: &str,
+    head_num: &str,
+    equations_counter: usize,
+    renderer: SupportedRenderer,
+) -> String {
+    use SupportedRenderer::*;
+    match renderer {
+        Html | Markdown => {
+            format!(
+                r#"<div id="{refer}" class="equation">
+                    <div class="equation_inner">
+                        <object data="assets/{file}" type="image/svg+xml"></object>
+                    </div><span>({head_num}{equations_counter})</span>
+                </div>"#,
+                refer = refer,
+                head_num = head_num,
+                equations_counter = equations_counter,
+                file = replacement.svg.display()
+            )
+        }
+        Latex | Tectonic => {
+            format!(r#"\[{}\]"#, replacement.intermediate())
+        }
+    }
+}
+
+pub fn format_equation<'a>(replacement: &Replacement<'a>, renderer: SupportedRenderer) -> String {
+    use SupportedRenderer::*;
+    match renderer {
+        Html | Markdown => {
+            format!(
+                r#"<div class="equation"><div class="equation_inner"><object data="assets/{file}" type="image/svg+xml"></object></div></div>\n"#,
+                file = replacement.svg.display()
+            )
+        }
+        Latex | Tectonic => {
+            format!(r#"\[{}\]"#, replacement.intermediate())
+        }
+    }
+}
+
+pub fn format_inline_equation<'a>(
+    replacement: &Replacement<'a>,
+    renderer: SupportedRenderer,
+) -> String {
+    use SupportedRenderer::*;
+    match renderer {
+        Html | Markdown => {
+            format!(
+                r#"<object class="equation_inline" data="assets/{file}" type="image/svg+xml"></object>"#,
+                file = replacement.svg.display()
+            )
+        }
+        Latex | Tectonic => {
+            format!(r#"${}$"#, replacement.content.s)
+        }
     }
 }
 
@@ -43,7 +107,8 @@ pub fn replace_blocks(
     asset_path: &Path,
     source: &str,
     head_num: &str,
-    used_fragments: &mut Vec<String>,
+    renderer: SupportedRenderer,
+    used_fragments: &mut Vec<PathBuf>,
     references: &mut HashMap<String, String>,
 ) -> Result<String> {
     let mut content = String::new();
@@ -53,39 +118,39 @@ pub fn replace_blocks(
     let mut figures_counter = 0;
     let mut equations_counter = 0;
 
-    let mut add_object = move |file: String, refer: &str, title: Option<&str>| -> String {
-        used_fragments.push(file.clone());
+    let mut add_object =
+        move |replacement: &Replacement<'_>, refer: &str, title: Option<&str>| -> String {
+            let file = replacement.svg.as_path();
+            used_fragments.push(file.to_owned());
 
-        if let Some(title) = title {
-            figures_counter += 1;
-            references.insert(
-                refer.to_string(),
-                format!("Figure {}{}", head_num, figures_counter),
-            );
+            if let Some(title) = title {
+                figures_counter += 1;
+                references.insert(
+                    refer.to_string(),
+                    format!("Figure {}{}", head_num, figures_counter),
+                );
 
-            format!(
-                r#"<figure id="{}" class="figure"><object data="assets/{}" type="image/svg+xml"/></object><figcaption>Figure {}{} {}</figcaption></figure>"#,
-                refer, file, head_num, figures_counter, title
-            )
-        } else if !refer.is_empty() {
-            equations_counter += 1;
-            references.insert(
-                refer.to_string(),
-                format!("{}{}", head_num, equations_counter),
-            );
-            format!(
-                r#"<div id="{}" class="equation"><div class="equation_inner"><object data="assets/{}" type="image/svg+xml"></object></div><span>({}{})</span></div>\n"#,
-                refer, file, head_num, equations_counter
-            )
-        } else {
-            format!(
-                r#"<div class="equation"><div class="equation_inner"><object data="assets/{}" type="image/svg+xml"></object></div></div>\n"#,
-                file
-            )
-        }
-    };
+                format_figure(
+                    replacement,
+                    refer,
+                    head_num,
+                    figures_counter,
+                    title,
+                    renderer,
+                )
+            } else if !refer.is_empty() {
+                equations_counter += 1;
+                references.insert(
+                    refer.to_string(),
+                    format!("{}{}", head_num, equations_counter),
+                );
+                format_equation_block(replacement, refer, head_num, equations_counter, renderer)
+            } else {
+                format_equation(replacement, renderer)
+            }
+        };
 
-    fs::create_dir_all(&fragment_path)?;
+    fs::create_dir_all(fragment_path)?;
 
     let mut acc = Vec::<String>::with_capacity(100);
 
@@ -118,7 +183,7 @@ pub fn replace_blocks(
 
         if let Some((start_loco, param)) = start_loco.take() {
             let elms = param
-                .splitn(3, ",")
+                .splitn(3, ',')
                 .map(|x| x.trim())
                 .map(|x| x.replace(BLOCK_DELIM, ""))
                 .collect::<Vec<_>>();
@@ -145,22 +210,30 @@ pub fn replace_blocks(
 
                 let generated_out = match &elms[..] {
                     ["latex", refer, title] => fragments::parse_latex(fragment_path, &content)
-                        .map(|file| add_object(file, refer, Some(title))),
+                        .map(|ref file| add_object(file, refer, Some(title))),
                     ["gnuplot", refer, title] => fragments::parse_gnuplot(fragment_path, &content)
-                        .map(|file| add_object(file, refer, Some(title))),
+                        .map(|ref file| add_object(file, refer, Some(title))),
                     ["gnuplotonly", refer, title] => {
                         fragments::parse_gnuplot_only(fragment_path, &content)
-                            .map(|file| add_object(file, refer, Some(title)))
+                            .map(|ref file| add_object(file, refer, Some(title)))
                     }
 
                     ["equation", refer] | ["equ", refer] => {
-                        fragments::parse_equation(fragment_path, &content, 1.6)
-                            .map(|file| add_object(file, refer, None))
+                        fragments::generate_replacement_file_from_template(
+                            fragment_path,
+                            &content,
+                            1.6,
+                        )
+                        .map(|ref file| add_object(file, refer, None))
                     }
 
                     ["equation"] | ["equ"] | _ => {
-                        fragments::parse_equation(fragment_path, &content, 1.6)
-                            .map(|file| add_object(file, "", None))
+                        fragments::generate_replacement_file_from_template(
+                            fragment_path,
+                            &content,
+                            1.6,
+                        )
+                        .map(|ref file| add_object(file, "", None))
                     }
                 }?;
                 acc.push(generated_out)
@@ -178,7 +251,8 @@ pub fn replace_inline_blocks(
     fragment_path: &Path,
     source: &str,
     references: &HashMap<String, String>,
-    used_fragments: &mut Vec<String>,
+    renderer: SupportedRenderer,
+    used_fragments: &mut Vec<PathBuf>,
 ) -> Result<String> {
     let mut is_code_block = false;
     source
@@ -216,10 +290,12 @@ pub fn replace_inline_blocks(
                     _ => {}
                 }
                 None
-            }
-        ));
-            
+            }));
 
+            let last_idx = linecontent.chars().count() as isize;
+            if Some(&last_idx) != v.last() {
+                v.push(last_idx);
+            }
 
             v.into_iter()
                 .tuple_windows()
@@ -230,67 +306,90 @@ pub fn replace_inline_blocks(
 
                     let elm = &linecontent[start..end];
 
-            if i % 2 == 0 {
-                // no within, so just return a string
-                return Ok(elm.to_owned());
-            }
+                    if i % 2 == 0 {
+                        // not within, so just return a string
+                        return Ok(elm.to_owned());
+                    }
 
-            let content = Content {
-                s: elm,
-                start: LiCo {
-                    lineno,
-                    column: start,
-                },
-                end: LiCo {
-                    lineno,
-                    column: end,
-                },
-            };
+                    let content = Content {
+                        s: elm,
+                        start: LiCo {
+                            lineno,
+                            column: start,
+                        },
+                        end: LiCo {
+                            lineno,
+                            column: end,
+                        },
+                    };
 
-            let generated_out = if elm.starts_with("ref:") {
-                let elms = elm.split(":").skip(1).collect::<Vec<&str>>();
+                    let generated_out =
+                        if elm.starts_with("ref:") {
+                            let elms = elm.split(':').skip(1).collect::<Vec<&str>>();
 
-                // we expect a type and reference name
-                if elms.len() != 2 {
-                    // if not just return as text again
-                    return Ok(elm.to_string());
-                }
+                            // we expect a type and reference name
+                            if elms.len() != 2 {
+                                // if not just return as text again
+                                return Ok(elm.to_string());
+                            }
 
-                match &elms[..] {
-                    ["fig", refere] => {
-                        references.get::<str>(refere)
-                            .ok_or(Error::InvalidReference(format!(r#"could not find reference to `{}` in line {}"#, elms[1], lineno)))
-                            .map(|x| format!(r#"<a class="fig_ref" href='#{}'>{}</a>"#, elms[1], x))
-                    },
-                    ["bib", refere] => {
-                        references.get::<str>(refere)
-                            .ok_or(Error::InvalidReference(format!("could not find reference to `{}` in line {}", elms[1], lineno)))
-                            .map(|x| format!(r#"<a class="bib_ref" href='bibliography.html#{}'>{}</a>"#, elms[1], x))
-                    },
-                    ["equ", refere] => {
-                        references.get::<str>(refere)
-                            .ok_or(Error::InvalidReference(format!("could not find reference to `{}` in line {}", elms[1], lineno)))
-                            .map(|x| format!(r#"<a class="equ_ref" href='#{}'>Eq. ({})</a>"#, elms[1], x))
-                    },
-                    [kind, _] => Err(Error::InvalidReference(format!("unknown reference type of `{}` in line {}", kind, lineno))),
-                    _ =>         Err(Error::InvalidReference(format!("reference has wrong number of arguments `{}` in line {}", elms.len(), lineno)))
+                            match &elms[..] {
+                            ["fig", refere] => references
+                                .get::<str>(refere)
+                                .ok_or(Error::InvalidReference{
+                                    to: elms[1].to_owned(), lineno
+                                })
+                                .map(|x| {
+                                    format!(r#"<a class="fig_ref" href='#{}'>{}</a>"#, elms[1], x)
+                                }),
+                            ["bib", refere] => references
+                                .get::<str>(refere)
+                                .ok_or(Error::InvalidReference{
+                                    to: elms[1].to_owned(), lineno
+                                })
+                                .map(|x| {
+                                    format!(
+                                        r#"<a class="bib_ref" href='bibliography.html#{}'>{}</a>"#,
+                                        elms[1], x
+                                    )
+                                }),
+                            ["equ", refere] => references
+                                .get::<str>(refere)
+                                .ok_or(Error::InvalidReference{
+                                    to: elms[1].to_owned(), lineno
+                                })
+                                .map(|x| {
+                                    format!(
+                                        r#"<a class="equ_ref" href='#{}'>Eq. ({})</a>"#,
+                                        elms[1], x
+                                    )
+                                }),
+                            [kind, _] => Err(Error::UnknownReferenceKind{
+                                kind: kind.to_owned().to_owned(), lineno,
+                            }),
+                            _ => Err(Error::UnexpectedReferenceArgCount {
+                                count: elms.len(),
+                                lineno
+                            }),
+                        }
+                        } else {
+                            fragments::generate_replacement_file_from_template(
+                                fragment_path,
+                                &content,
+                                1.3,
+                            )
+                            .map(|replacement| {
+                                let res = format_inline_equation(&replacement, renderer);
+                                used_fragments.push(replacement.svg);
+                                res
+                            })
+                        };
 
-                }
-            } else {
-                fragments::parse_equation(fragment_path, &content, 1.3)
-                    .map(|filename| {
-                        let res = format!(r#"<object class="equation_inline" data="assets/{}" type="image/svg+xml"></object>"#, filename);
-                        used_fragments.push(filename);
-
-                        res
-                    })
-            };
-
-            generated_out
+                    generated_out
+                })
+                .collect::<Result<Vec<String>>>()
+                .map(|x| x.join("\n"))
         })
-        .collect::<Result<Vec<String>>>()
+        .collect::<Result<Vec<_>>>()
         .map(|x| x.join("\n"))
-    })
-    .collect::<Result<Vec<_>>>()
-    .map(|x| x.join("\n"))
-}
+ufc}

@@ -1,6 +1,6 @@
 use clap::Parser;
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor};
-use mdbook_scientific::error::*;
+use mdbook_scientific::errors::*;
 use mdbook_scientific::Scientific;
 use std::io;
 use std::process;

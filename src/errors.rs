@@ -13,8 +13,14 @@ pub enum Error {
     #[error("Invalid math: {0} {1} at line {2}")]
     InvalidMath(String, String, usize),
 
-    #[error("Invalid reference: {0}")]
-    InvalidReference(String),
+    #[error("Invalid reference to `{to}` in line no. {lineno}")]
+    InvalidReference { to: String, lineno: usize },
+
+    #[error("Unknown reference to `{kind}` in line no. {lineno}")]
+    UnknownReferenceKind { kind: String, lineno: usize },
+
+    #[error("Got `{count}` arguements in line no. {lineno}")]
+    UnexpectedReferenceArgCount { count: usize, lineno: usize },
 
     #[error("Invalid bibliography: {0}")]
     InvalidBibliography(String),

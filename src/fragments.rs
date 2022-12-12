@@ -1,14 +1,13 @@
-use fs::File;
 use fs_err as fs;
 use itertools::Itertools;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::{io::Write, str, usize};
 
 use sha2::{Digest, Sha256};
 
-use crate::error::{Error, Result};
-use crate::preprocess::Content;
+use crate::errors::*;
+use crate::types::*;
 
 /// Convert input string to 24 character hash
 pub fn hash(input: impl AsRef<str>) -> String {
@@ -127,21 +126,19 @@ fn generate_latex_from_gnuplot<'a>(
 
     let mut stdin = cmd.stdin.expect("Stdin of gnuplot spawn must exist. qed");
 
-    stdin
-        .write_all(&format!("set output '{}.tex'\n", filename).as_bytes())
-        .map_err(|err| Error::Io(err))?;
-    stdin
-        .write_all("set terminal epslatex color standalone\n".as_bytes())
-        .map_err(|err| Error::Io(err))?;
-    stdin
-        .write_all(content.as_bytes())
-        .map_err(|err| Error::Io(err))?;
+    stdin.write_all(format!("set output '{}.tex'\n", filename).as_bytes())?;
+    stdin.write_all("set terminal epslatex color standalone\n".as_bytes())?;
+    stdin.write_all(content.as_bytes())?;
 
     Ok(())
 }
 
 /// Parse an equation with the given zoom
-pub fn parse_equation<'a>(dest_path: &Path, content: &Content<'a>, zoom: f32) -> Result<String> {
+pub fn generate_replacement_file_from_template<'a>(
+    dest_path: &Path,
+    content: &Content<'a>,
+    zoom: f32,
+) -> Result<Replacement<'a>> {
     let name = hash(content);
     let path = dest_path.join(&name);
 
@@ -155,49 +152,65 @@ pub fn parse_equation<'a>(dest_path: &Path, content: &Content<'a>, zoom: f32) ->
         content.s
     );
 
-    let content = content.as_ref();
+    let tex = content.as_ref();
     // create a new tex file containing the equation
     if !path.with_extension("tex").exists() {
-        let mut file = File::create(path.with_extension("tex")).map_err(|err| Error::Io(err))?;
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(path.with_extension("tex"))?;
 
-        let content = include_str!("fragment.tex")
+        let fragment = include_str!("fragment.tex")
             .split("$$")
             .enumerate()
             .map(|(idx, s)| match idx {
                 0 | 2 => s,
-                1 => content,
+                1 => tex,
                 _ => unreachable!("fragment.tex must have exactly 2 instances of `$$`"),
             })
             .join("$$");
 
-        file.write_all(content.as_bytes())?;
+        file.write_all(fragment.as_bytes())?;
     }
 
     generate_svg_from_latex(&path, zoom)?;
 
-    Ok(name + ".svg")
+    Ok(Replacement {
+        content: content.clone(),
+        intermediate: None,
+        svg: PathBuf::from(name + ".svg"),
+    })
 }
 
 /// Parse a latex content and convert it to a SVG file
-pub fn parse_latex<'a>(dest_path: &Path, content: &Content<'a>) -> Result<String> {
-    let content = content.as_ref();
-    let name = hash(content);
+pub fn parse_latex<'a>(dest_path: &Path, content: &Content<'a>) -> Result<Replacement<'a>> {
+    let tex = content.as_ref();
+    let name = hash(tex);
     let path = dest_path.join(&name);
 
     // create a new tex file containing the equation
     if !path.with_extension("tex").exists() {
-        let mut file = File::create(path.with_extension("tex"))?;
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(path.with_extension("tex"))?;
 
-        file.write_all(content.as_bytes())?;
+        file.write_all(tex.as_bytes())?;
     }
 
     generate_svg_from_latex(&path, 1.0)?;
 
-    Ok(name + ".svg")
+    Ok(Replacement {
+        content: content.clone(),
+        intermediate: None,
+        svg: PathBuf::from(name + ".svg"),
+    })
 }
 
 /// Parse a gnuplot file and generate a SVG file
-pub fn parse_gnuplot<'a>(dest_path: &Path, content: &Content<'a>) -> Result<String> {
+pub fn parse_gnuplot<'a>(dest_path: &Path, content: &Content<'a>) -> Result<Replacement<'a>> {
     let name = hash(content);
     let path = dest_path.join(&name);
 
@@ -210,13 +223,19 @@ pub fn parse_gnuplot<'a>(dest_path: &Path, content: &Content<'a>) -> Result<Stri
         generate_svg_from_latex(&path, 1.0)?;
     }
 
-    Ok(name + ".svg")
+    let intermediate = fs::read_to_string(path.with_extension("tex"))?;
+
+    Ok(Replacement {
+        content: content.to_owned(),
+        intermediate: Some(intermediate),
+        svg: PathBuf::from(name + ".svg"),
+    })
 }
 
 /// Parse gnuplot without using the latex backend
-pub fn parse_gnuplot_only<'a>(dest_path: &Path, content: &Content<'a>) -> Result<String> {
-    let content = content.as_ref();
-    let name = hash(content);
+pub fn parse_gnuplot_only<'a>(dest_path: &Path, content: &Content<'a>) -> Result<Replacement<'a>> {
+    let gnuplot_input = content.as_ref();
+    let name = hash(gnuplot_input);
     let path = dest_path.join(&name);
 
     if !path.with_extension("svg").exists() {
@@ -230,21 +249,17 @@ pub fn parse_gnuplot_only<'a>(dest_path: &Path, content: &Content<'a>) -> Result
         //.expect("Could not spawn gnuplot");
 
         let mut stdin = cmd.stdin.unwrap();
-        stdin
-            .write_all(&format!("set output '{}.svg'\n", name).as_bytes())
-            .map_err(|err| Error::Io(err))?;
-        stdin
-            .write_all("set terminal svg\n".as_bytes())
-            .map_err(|err| Error::Io(err))?;
-        stdin
-            .write_all("set encoding utf8\n".as_bytes())
-            .map_err(|err| Error::Io(err))?;
-        stdin
-            .write_all(content.as_bytes())
-            .map_err(|err| Error::Io(err))?;
+        stdin.write_all(format!("set output '{}.svg'\n", name).as_bytes())?;
+        stdin.write_all("set terminal svg\n".as_bytes())?;
+        stdin.write_all("set encoding utf8\n".as_bytes())?;
+        stdin.write_all(gnuplot_input.as_bytes())?;
     }
 
-    Ok(format!("{}.svg", name))
+    Ok(Replacement {
+        content: content.clone(),
+        intermediate: None,
+        svg: PathBuf::from(name + ".svg"),
+    })
 }
 
 /// Generate html from BibTeX file using `bib2xhtml`
