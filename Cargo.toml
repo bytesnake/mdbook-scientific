@@ -24,3 +24,7 @@ thiserror = "1"
 fs-err = "2.8"
 color-eyre = { version = "0.6.2", features = [] }
 itertools = "0.10"
+semver = "1"
+
+[dev-dependencies]
+assert_matches = "1"

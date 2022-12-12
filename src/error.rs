@@ -4,7 +4,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Invalid math {0} {1} {2}")]
+    #[error(transparent)]
+    SemVer(#[from] semver::Error),
+
+    #[error("Rendered `{0}` not supported")]
+    RendererNotSupported(String),
+
+    #[error("Invalid math: {0} {1} at line {2}")]
     InvalidMath(String, String, usize),
 
     #[error("Invalid math {0}")]

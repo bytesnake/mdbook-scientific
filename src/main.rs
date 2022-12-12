@@ -35,7 +35,9 @@ fn main() -> color_eyre::eyre::Result<()> {
 fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<()> {
     let (ctx, book) = CmdPreprocessor::parse_input(io::stdin()).map_err(Error::MdBook)?;
 
-    if ctx.mdbook_version != mdbook::MDBOOK_VERSION {
+    let compiled_against = semver::VersionReq::parse(mdbook::MDBOOK_VERSION)?;
+    let running_against = semver::Version::parse(ctx.mdbook_version.as_str())?;
+    if !compiled_against.matches(&running_against) {
         // We should probably use the `semver` crate to check compatibility
         // here...
         eprintln!(
