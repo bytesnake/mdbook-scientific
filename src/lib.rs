@@ -136,7 +136,18 @@ impl Scientific {
                         &mut used_fragments,
                         &mut references,
                     ) {
-                        Ok(reconstructed) => ch.content = reconstructed,
+                        Ok(mut reconstructed) => {
+                            reconstructed.push('\n');
+                            if reconstructed != ch.content {
+                                for line in ch.content.lines() {
+                                    eprintln!("- {}", line);
+                                }
+                                for line in reconstructed.lines() {
+                                    eprintln!("+ {}", line);
+                                }
+                                ch.content = reconstructed;
+                            }
+                        }
                         Err(err) => error = Err(err),
                     }
                 }
@@ -162,7 +173,18 @@ impl Scientific {
                         renderer,
                         &mut used_fragments,
                     ) {
-                        Ok(reconstructed) => ch.content = reconstructed,
+                        Ok(mut reconstructed) => {
+                            reconstructed.push('\n');
+                            if reconstructed != ch.content {
+                                for line in ch.content.lines() {
+                                    eprintln!("- {}", line);
+                                }
+                                for line in reconstructed.lines() {
+                                    eprintln!("+ {}", line);
+                                }
+                                ch.content = reconstructed
+                            }
+                        },
                         Err(err) => error = Err(err),
                     }
                 }
