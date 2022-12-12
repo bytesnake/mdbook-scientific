@@ -392,4 +392,4 @@ pub fn replace_inline_blocks(
         })
         .collect::<Result<Vec<_>>>()
         .map(|x| x.join("\n"))
-ufc}
+}
