@@ -37,7 +37,7 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
         let latex_path = find_binary("latex")?;
 
         let cmd = Command::new(latex_path)
-            .current_dir(&dest_path)
+            .current_dir(dest_path)
             //.arg("--jobname").arg(&dvi_path)
             .arg(&file.with_extension("tex"))
             .output()
@@ -51,19 +51,19 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
             // exit the program
             if buf.is_empty() {
                 let buf = String::from_utf8_lossy(&cmd.stderr);
-                panic!("Latex exited with `{}`", buf);
+                panic!("latex exited with `{}`", buf);
             }
 
             let err = buf
-                .split("\n")
+                .split('\n')
                 .filter(|x| {
                     (x.starts_with("! ") || x.starts_with("l.")) && !x.contains("Emergency stop")
                 })
                 .fold(("", "", usize::MAX), |mut err, elm| {
-                    if elm.starts_with("! ") {
-                        err.0 = &elm[2..];
-                    } else if elm.starts_with("l.") {
-                        let mut elms = elm[2..].splitn(2, " ").map(|x| x.trim());
+                    if let Some(striped) = elm.strip_prefix("! ") {
+                        err.0 = striped;
+                    } else if let Some(striped) = elm.strip_prefix("l.") {
+                        let mut elms = striped.splitn(2, ' ').map(|x| x.trim());
                         if let Some(Ok(val)) = elms.next().map(|x| x.parse::<usize>()) {
                             err.2 = val;
                         }
@@ -89,7 +89,7 @@ pub fn generate_svg_from_latex(path: &Path, zoom: f32) -> Result<()> {
         let dvisvgm_path = find_binary("dvisvgm")?;
 
         let cmd = Command::new(dvisvgm_path)
-            .current_dir(&dest_path)
+            .current_dir(dest_path)
             .arg("-b")
             .arg("1")
             .arg("--font-format=woff")
@@ -255,7 +255,7 @@ pub fn bib_to_html(source: &str, bib2xhtml: &str) -> Result<String> {
     //./bib2xhtml.pl -s alpha -u -U ~/Documents/Bachelor_thesis/literature.bib
     let cmd = Command::new(bib2xhtml.join("./bib2xhtml.pl"))
         .current_dir(bib2xhtml)
-        .args(&["-s", "alpha", "-u", "-U"])
+        .args(["-s", "alpha", "-u", "-U"])
         .arg(source)
         .output()
         .expect("Could not spawn bib2xhtml");
@@ -267,7 +267,7 @@ pub fn bib_to_html(source: &str, bib2xhtml: &str) -> Result<String> {
         Err(Error::InvalidBibliography(err_str.to_string()))
     } else {
         let buf = buf
-            .split("\n")
+            .split('\n')
             .skip_while(|x| *x != "<dl class=\"bib2xhtml\">")
             .take_while(|x| *x != "</dl>")
             .map(|x| x.replace("<a name=\"", "<a id=\""))
