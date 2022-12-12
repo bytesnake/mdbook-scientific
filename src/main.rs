@@ -47,7 +47,7 @@ fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<()> {
         );
     }
 
-    let processed_book = pre.run(&ctx, book)?;
+    let processed_book = dbg!(pre.run(&ctx, dbg!(book))?);
 
     serde_json::to_writer(io::stdout(), &processed_book)?;
 
