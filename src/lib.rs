@@ -3,6 +3,7 @@ mod preprocess;
 
 use crate::errors::Error;
 use fs_err as fs;
+use preprocess::gen_mermaid_charts;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -104,7 +105,9 @@ impl Scientific {
                         book.push_item(bib_chapter);
                     }
                 }
-                SupportedRenderer::Tectonic | SupportedRenderer::Latex => {}
+                SupportedRenderer::Tectonic | SupportedRenderer::Latex => {
+                    //native support for bibtex, no need to fuck around
+                }
             }
 
             // assets path
@@ -113,6 +116,14 @@ impl Scientific {
                 .map(|x| x.as_str().expect("Assumes valid UTF8 for assets. qed"))
                 .unwrap_or("src/");
             let asset_path = ctx.root.join(asset_path);
+
+            // comment out mermaid charts as regular code blocks
+            // TODO make this prerendered stuff too
+            book.for_each_mut(|item| {
+                if let BookItem::Chapter(ref mut ch) = item {
+                    ch.content = gen_mermaid_charts(ch.content.as_str(), renderer).unwrap();
+                }
+            });
 
             // process blocks like `$$ .. $$`
             book.for_each_mut(|item| {
@@ -139,12 +150,12 @@ impl Scientific {
                         Ok(mut reconstructed) => {
                             reconstructed.push('\n');
                             if reconstructed != ch.content {
-                                for line in ch.content.lines() {
-                                    eprintln!("- {}", line);
-                                }
-                                for line in reconstructed.lines() {
-                                    eprintln!("+ {}", line);
-                                }
+                                // for line in ch.content.lines() {
+                                //     eprintln!("- {}", line);
+                                // }
+                                // for line in reconstructed.lines() {
+                                //     eprintln!("+ {}", line);
+                                // }
                                 ch.content = reconstructed;
                             }
                         }
@@ -176,15 +187,15 @@ impl Scientific {
                         Ok(mut reconstructed) => {
                             reconstructed.push('\n');
                             if reconstructed != ch.content {
-                                for line in ch.content.lines() {
-                                    eprintln!("- {}", line);
-                                }
-                                for line in reconstructed.lines() {
-                                    eprintln!("+ {}", line);
-                                }
+                                // for line in ch.content.lines() {
+                                //     eprintln!("- {}", line);
+                                // }
+                                // for line in reconstructed.lines() {
+                                //     eprintln!("+ {}", line);
+                                // }
                                 ch.content = reconstructed
                             }
-                        },
+                        }
                         Err(err) => error = Err(err),
                     }
                 }

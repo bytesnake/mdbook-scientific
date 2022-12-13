@@ -247,6 +247,48 @@ pub fn replace_blocks(
     Ok(acc.join("\n"))
 }
 
+/// Currently there is no way to display mermaid
+/// TODO FIXME
+pub fn gen_mermaid_charts(source: &str, renderer: SupportedRenderer) -> Result<String> {
+    match renderer {
+        // markdown and html can just fine deal with it
+        SupportedRenderer::Html => return Ok(source.to_owned()),
+        SupportedRenderer::Markdown => return Ok(source.to_owned()),
+        _ => {
+            eprintln!("Stripping `mermaid` fencing of code block, not supported yet")
+        }
+    }
+
+    use pulldown_cmark::*;
+    use pulldown_cmark_to_cmark::cmark;
+
+    let mut buf = String::with_capacity(source.len());
+
+    let events = Parser::new_ext(&source, Options::all())
+        .into_offset_iter()
+        .filter_map(|(mut event, _offset)| {
+            match event {
+                Event::Start(Tag::CodeBlock(ref mut kind)) => match kind {
+                    CodeBlockKind::Fenced(s) if s.as_ref() == "mermaid" => {
+                        *kind = CodeBlockKind::Fenced("text".into());
+                    }
+                    _ => {}
+                },
+                Event::End(Tag::CodeBlock(ref mut kind)) => match kind {
+                    CodeBlockKind::Fenced(s) if s.as_ref() == "mermaid" => {
+                        *kind = CodeBlockKind::Fenced("text".into());
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+            Some(event)
+        });
+
+    pulldown_cmark_to_cmark::cmark(events, &mut buf).map_err(Error::CommonMarkGlue)?;
+    Ok(buf)
+}
+
 pub fn replace_inline_blocks(
     fragment_path: &Path,
     source: &str,
@@ -304,7 +346,29 @@ pub fn replace_inline_blocks(
                     let start = std::cmp::min(start + 1, end) as usize;
                     let end = end as usize;
 
-                    let elm = &linecontent[start..end];
+                    let mut iter = linecontent.char_indices().skip(start);
+
+                    // zero _byte_ indices
+                    // TODO FIXME
+                    let (byte_start, byte_end) = iter
+                        .next()
+                        .map(|(byte_start, _)| {
+                            (
+                                byte_start,
+                                iter.skip(end.saturating_sub(start).saturating_sub(1))
+                                    .next()
+                                    .map(|x| x.0)
+                                    .unwrap_or(linecontent.len()),
+                            )
+                        })
+                        .unwrap_or_else(|| {
+                            if let Some((bytes_end, _)) = linecontent.char_indices().last() {
+                                (0, bytes_end)
+                            } else {
+                                (0, linecontent.len())
+                            }
+                        });
+                    let elm = dbg!(&linecontent[byte_start..byte_end]);
 
                     if i % 2 == 0 {
                         // not within, so just return a string
@@ -312,9 +376,11 @@ pub fn replace_inline_blocks(
                     }
 
                     let content = Content {
+                        // content without the $ delimiters
                         s: elm,
                         start: LiCo {
                             lineno,
+                            // one indexed ?
                             column: start,
                         },
                         end: LiCo {

@@ -4,6 +4,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("Failed to render cmark events after filtering mermaids out: {0:?}")]
+    CommonMarkGlue(std::fmt::Error),
+
     #[error(transparent)]
     SemVer(#[from] semver::Error),
 

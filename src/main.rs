@@ -34,13 +34,13 @@ fn main() -> color_eyre::eyre::Result<()> {
     if let Some(Sub::Supports { ref renderer }) = args.supports {
         handle_supports(&preprocessor, renderer);
     } else {
-        handle_preprocessing(&preprocessor).map_err(Error::from)?;
+        handle_preprocessing(&preprocessor)?;
     }
     Ok(())
 }
 
 fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<()> {
-    let (ctx, book) = CmdPreprocessor::parse_input(io::stdin()).map_err(Error::MdBook)?;
+    let (ctx, book) = CmdPreprocessor::parse_input(io::stdin())?;
 
     let compiled_against = semver::VersionReq::parse(mdbook::MDBOOK_VERSION)?;
     let running_against = semver::Version::parse(ctx.mdbook_version.as_str())?;
